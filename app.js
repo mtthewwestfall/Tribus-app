@@ -46,7 +46,7 @@ async function discoverBusinesses(){
   if(!industry||!location){message.textContent="Enter a business type and a location first.";return}
   button.disabled=true;button.textContent="Searching…";message.textContent="Searching OpenStreetMap for mapped business listings near your location. This can take a few seconds…";
   try{
-    const response=await fetch("/api/discover",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({industry,location,limit})});
+    const response=await fetch("/api/discover",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({industry,location,limit,radiusMeters:Number($("radiusFilter").value||25)*1000})});
     const data=await response.json();
     if(!response.ok){const detail=typeof data.detail==="string"?data.detail:"";throw new Error([data.error||"Discovery failed",detail].filter(Boolean).join(" — "))}
     let added=0,updated=0;

@@ -77,6 +77,25 @@ const server = http.createServer(async (req, res) => {
   }
   const url = new URL(req.url || "/", "http://localhost");
   if (url.pathname === "/api/health") return json(res, 200, { ok: true, app: "Tribus Opportunity Radar" });
+  if (url.pathname === "/api/geocode" && req.method === "GET") {
+    const query = String(url.searchParams.get("q") || "").trim().slice(0, 180);
+    const lat = Number(url.searchParams.get("lat")), lon = Number(url.searchParams.get("lon"));
+    const reverse = url.searchParams.has("lat") && url.searchParams.has("lon") && Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+    if (!query && !reverse) return json(res, 400, { error: "Provide a place query or valid latitude and longitude." });
+    const key = reverse ? "reverse:" + lat.toFixed(5) + ":" + lon.toFixed(5) : "geo:" + query.toLowerCase();
+    try {
+      let result = cache.get(key);
+      if (!result) {
+        const endpoint = reverse ? "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + lat + "&lon=" + lon : "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(query);
+        const response = await fetch(endpoint, { headers: { "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" }, signal: AbortSignal.timeout(12000) });
+        if (!response.ok) throw new Error("OpenStreetMap geocoding failed (" + response.status + ")");
+        const data = await response.json(); const item = reverse ? data : data[0];
+        if (!item || !item.lat || !item.lon) return json(res, 404, { error: "Place not found." });
+        result = { lat: Number(item.lat), lon: Number(item.lon), displayName: item.display_name || query || "Pinned location" }; cache.set(key, result);
+      }
+      return json(res, 200, result);
+    } catch (error) { return json(res, 502, { error: "OpenStreetMap geocoding is temporarily unavailable.", detail: error.message }); }
+  }
   if (url.pathname === "/api/discover" && req.method === "POST") {
     let raw = "";
     for await (const chunk of req) { raw += chunk; if (raw.length > 100_000) return json(res, 413, { error: "Request too large" }); }
@@ -88,22 +107,24 @@ const server = http.createServer(async (req, res) => {
     if (!query || !location) return json(res, 400, { error: "Industry and location are required." });
     const variants = [...new Set([query, query + " shops", query + " services", "independent businesses"])];
     const found = new Map();
-    const geoKey = "geo:" + location.toLowerCase();
+    const radius = Math.max(1000, Math.min(25000, Number(input?.radiusMeters) || 15000));
     try {
-      let geo = cache.get(geoKey);
-      if (!geo) {
-        const geoUrl = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location);
-        const geoResponse = await fetch(geoUrl, {
-          headers: { "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" },
-          signal: AbortSignal.timeout(12000)
-        });
-        if (!geoResponse.ok) throw new Error("OpenStreetMap location lookup failed (" + geoResponse.status + ")");
-        const geoResults = await geoResponse.json();
-        if (!geoResults.length) return json(res, 200, { provider: "OpenStreetMap + Overpass", query, location, requested: target, count: 0, results: [], note: "Location not found. Try a town, city, postcode, or full address." });
-        geo = { lat: Number(geoResults[0].lat), lon: Number(geoResults[0].lon), displayName: geoResults[0].display_name || location };
-        cache.set(geoKey, geo);
+      let geo;
+      const inputLat = Number(input?.lat), inputLon = Number(input?.lon);
+      if (input?.lat !== undefined && input?.lon !== undefined && Number.isFinite(inputLat) && Number.isFinite(inputLon) && Math.abs(inputLat) <= 90 && Math.abs(inputLon) <= 180) {
+        geo = { lat: inputLat, lon: inputLon, displayName: location || ("Pinned location " + inputLat.toFixed(5) + ", " + inputLon.toFixed(5)) };
+      } else {
+        const geoKey = "geo:" + location.toLowerCase(); let cachedGeo = cache.get(geoKey);
+        if (!cachedGeo) {
+          const geoUrl = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location);
+          const geoResponse = await fetch(geoUrl, { headers: { "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" }, signal: AbortSignal.timeout(12000) });
+          if (!geoResponse.ok) throw new Error("OpenStreetMap location lookup failed (" + geoResponse.status + ")");
+          const geoResults = await geoResponse.json();
+          if (!geoResults.length) return json(res, 200, { provider: "OpenStreetMap + Overpass", query, location, requested: target, count: 0, results: [], note: "Location not found. Try a town, city, postcode, or full address." });
+          cachedGeo = { lat: Number(geoResults[0].lat), lon: Number(geoResults[0].lon), displayName: geoResults[0].display_name || location }; cache.set(geoKey, cachedGeo);
+        }
+        geo = cachedGeo;
       }
-      const radius = Math.max(1000, Math.min(25000, Number(input?.radiusMeters) || 15000));
       const overpassQuery = '[out:json][timeout:25];(nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["shop"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["office"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["craft"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["amenity"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["healthcare"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["tourism"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["leisure"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["industrial"];);out body center 200;';
       const overpassResponse = await fetch("https://overpass-api.de/api/interpreter", {
         method: "POST",

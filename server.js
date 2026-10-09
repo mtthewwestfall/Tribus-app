@@ -58,7 +58,9 @@ const server = http.createServer(async (req, res) => {
       for (const term of variants) {
         let pageToken = "";
         for (let page = 0; page < 3 && found.size < target; page++) {
-          const isUS = /\\b(united states|usa|u\\.s\\.|u\\.s\\.a\\.)\\b/i.test(location) || /\\b(US|USA)\\b/i.test(location);\n          const isUK = /\\b(united kingdom|uk|great britain|england|manchester)\\b/i.test(location);\n          const body = { textQuery: term + " in " + location, languageCode: "en", ...(isUS ? {regionCode:"US"} : isUK ? {regionCode:"GB"} : {}), pageSize: 20 };
+          const isUS = /\b(united states|usa|u\.s\.|u\.s\.a\.)\b/i.test(location) || /\b(US|USA)\b/i.test(location);
+          const isUK = /\b(united kingdom|uk|great britain|england|manchester)\b/i.test(location);
+          const body = { textQuery: term + " in " + location, languageCode: "en", ...(isUS ? {regionCode:"US"} : isUK ? {regionCode:"GB"} : {}), pageSize: 20 };
           if (pageToken) body.pageToken = pageToken;
           const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
             method: "POST",

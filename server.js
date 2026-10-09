@@ -12,6 +12,42 @@ function json(res, status, body) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", "access-control-allow-origin": "same-origin" });
   res.end(JSON.stringify(body));
 }
+async function inspectPublicWebsite(input) {
+  let current;
+  try { current = new URL(input); } catch { return null; }
+  const safe = (u) => {
+    const h = u.hostname.toLowerCase();
+    return ["http:", "https:"].includes(u.protocol) && !u.username && !u.password &&
+      !["localhost", "localhost.localdomain"].includes(h) && !h.endsWith(".local") &&
+      !h.endsWith(".internal") && !/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(h) && h.includes(".");
+  };
+  if (!safe(current)) return null;
+  for (let hop = 0; hop < 4; hop++) {
+    let response;
+    try {
+      response = await fetch(current, { redirect: "manual", signal: AbortSignal.timeout(7000),
+        headers: { "user-agent": "TribusOpportunityRadar/1.0", "accept": "text/html,application/xhtml+xml" } });
+    } catch { return null; }
+    if ([301,302,303,307,308].includes(response.status)) {
+      const loc = response.headers.get("location");
+      if (!loc) return null;
+      try { current = new URL(loc, current); } catch { return null; }
+      if (!safe(current)) return null;
+      continue;
+    }
+    if (!response.ok || !(response.headers.get("content-type") || "").includes("text/html")) return null;
+    const html = (await response.text()).slice(0, 500000);
+    const strip = (v) => String(v || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\\s+/g, " ").trim();
+    const title = strip((html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i) || [])[1] || "");
+    const descriptionMatch = html.match(/<meta[^>]+(?:name|property)=["'](?:description|og:description|twitter:description)["'][^>]+content=["']([^"']*)["']/i) || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property)=["'](?:description|og:description|twitter:description)["']/i);
+    const description = strip(descriptionMatch?.[1] || "");
+    const emails = [...new Set((html.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi) || []).filter(x => !/example\\.|wixpress|sentry/i.test(x)))].slice(0, 3);
+    const phones = [...new Set((html.match(/(?:\\+?\\d[\\d ().-]{7,}\\d)/g) || []).map(x => x.trim()).filter(x => x.replace(/\\D/g, "").length >= 9 && x.replace(/\\D/g, "").length <= 15))].slice(0, 3);
+    return { url: current.href, title: title.slice(0, 180), description: description.slice(0, 500), emails, phones, excerpt: strip(html).slice(0, 420) };
+  }
+  return null;
+}
+
 function scoreResult(business, results = []) {
   const norm = (v) => String(v || "").toLowerCase().replace(/^www\./, "").replace(/[^a-z0-9]+/g, " ").trim();
   const name = norm(business.name);
@@ -141,7 +177,11 @@ const server = http.createServer(async (req, res) => {
     if (cache.has(String(business.id))) return json(res, 200, { ...cache.get(String(business.id)), cached: true });
     const apiKey = process.env.TAVILY_API_KEY;
     if (!apiKey) {
-      const result = { businessId: String(business.id), status: "Needs review", confidence: "low", provider: "not-configured", verifiedUrl: "", researchStatus: "Not researched", researchSummary: "Automated public-source research requires TAVILY_API_KEY. This listing has not been independently verified.", evidence: ["TAVILY_API_KEY is not configured; no website or business claims were verified."], candidates: [], sources: [], cached: false };
+      const page = business.website ? await inspectPublicWebsite(String(business.website)) : null;
+      const sources = page ? [{ title: page.title || page.url, url: page.url, excerpt: [page.description, page.excerpt].filter(Boolean).join(" ").slice(0, 420) }] : [];
+      const evidence = ["Research mode: direct public website inspection (no paid search API).", ...(page?.title ? ["Website title: " + page.title] : []), ...(page?.description ? ["Website meta description: " + page.description] : []), ...(page?.emails?.length ? ["Email address(es) visible in website HTML: " + page.emails.join(", ") + " (not independently verified)"] : []), ...(page?.phones?.length ? ["Phone-like number(s) visible in website HTML: " + page.phones.join(", ") + " (not independently verified)"] : [])];
+      const result = { businessId: String(business.id), status: page ? "Website Inspected — review required" : "Needs review", confidence: "low", provider: "direct-website", verifiedUrl: page?.url || "", researchStatus: page ? "Website inspected — review required" : "Limited research — review required", researchSummary: page ? "Read public page metadata and visible text from the listed website. This does not confirm ownership, current operation, service area, or buyer intent." : business.website ? "The listed website could not be safely fetched or did not return a readable public HTML page. Verify manually." : "No website is present in the map listing. Without a search API, external business discovery is limited to the mapped listing and its tags.", evidence, candidates: [], sources, websiteDetails: page ? { title: page.title, description: page.description, emails: page.emails, phones: page.phones } : null, cached: false };
+      cache.set(String(business.id), result);
       return json(res, 200, result);
     }
     try {

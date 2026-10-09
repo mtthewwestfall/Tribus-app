@@ -44,7 +44,7 @@ async function discoverBusinesses(){
   const industry=$("discoverIndustry").value.trim(), location=$("discoverLocation").value.trim(), limit=Number($("discoverLimit").value)||50;
   const button=$("discoverBtn"), message=$("discoverMessage");
   if(!industry||!location){message.textContent="Enter a business type and a location first.";return}
-  button.disabled=true;button.textContent="Searching…";message.textContent="Searching Google Places for real business listings. This can take a few seconds…";
+  button.disabled=true;button.textContent="Searching…";message.textContent="Searching OpenStreetMap for mapped business listings near your location. This can take a few seconds…";
   try{
     const response=await fetch("/api/discover",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({industry,location,limit})});
     const data=await response.json();

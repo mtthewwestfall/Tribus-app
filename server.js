@@ -50,61 +50,86 @@ const server = http.createServer(async (req, res) => {
     const location = String(input?.location || "Manchester, UK").trim().slice(0, 120);
     const target = Math.max(1, Math.min(50, Number(input?.limit) || 50));
     if (!query || !location) return json(res, 400, { error: "Industry and location are required." });
-    const apiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
-    if (!apiKey) return json(res, 503, { error: "Google Places is not configured yet. Add GOOGLE_MAPS_API_KEY or GOOGLE_PLACES_API_KEY to this Railway service's Variables, then redeploy. The key must have Places API (New) enabled." });
     const variants = [...new Set([query, query + " shops", query + " services", "independent businesses"])];
     const found = new Map();
+    const geoKey = "geo:" + location.toLowerCase();
     try {
-      for (const term of variants) {
-        let pageToken = "";
-        for (let page = 0; page < 3 && found.size < target; page++) {
-          const isUS = /\b(united states|usa|u\.s\.|u\.s\.a\.)\b/i.test(location) || /\b(US|USA)\b/i.test(location);
-          const isUK = /\b(united kingdom|uk|great britain|england|manchester)\b/i.test(location);
-          const body = { textQuery: term + " in " + location, languageCode: "en", ...(isUS ? {regionCode:"US"} : isUK ? {regionCode:"GB"} : {}), pageSize: 20 };
-          if (pageToken) body.pageToken = pageToken;
-          const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
-            method: "POST",
-            headers: { "content-type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.addressComponents,places.websiteUri,places.types,places.location,places.rating,places.userRatingCount,places.googleMapsUri,nextPageToken" },
-            body: JSON.stringify(body), signal: AbortSignal.timeout(15000)
-          });
-          if (!response.ok) {
-            const detail = await response.text();
-            const status = response.status === 401 || response.status === 403 ? 502 : 502;
-            return json(res, status, { error: "Google Places search failed. Check that Places API (New) is enabled and the key is valid and unrestricted to server-side use.", detail: detail.slice(0, 500) });
-          }
-          const payload = await response.json();
-          for (const p of payload.places || []) {
-            if (!p.id || found.has(p.id)) continue;
-            const loc = p.location || {};
-            const components = p.addressComponents || [];
-            const locality = components.find(c => (c.types || []).includes("locality")) || components.find(c => (c.types || []).includes("postal_town")) || {};
-            const region = components.find(c => (c.types || []).includes("administrative_area_level_1")) || {};
-            found.set(p.id, {
-              id: "google-" + p.id, sourceId: p.id,
-              name: p.displayName?.text || "Unnamed business",
-              category: (p.types || []).filter(t => !["point_of_interest","establishment"].includes(t)).slice(0, 2).join(", ").replace(/_/g, " ") || query,
-              city: locality?.longText || location, region: region?.shortText || region?.longText || "",
-              address: p.formattedAddress || "", website: p.websiteUri || "",
-              lat: typeof loc.latitude === "number" ? loc.latitude : null,
-              lon: typeof loc.longitude === "number" ? loc.longitude : null,
-              rating: p.rating ?? null, reviewCount: p.userRatingCount ?? 0,
-              mapsUrl: p.googleMapsUri || "", score: 50, status: "New",
-              websiteStatus: p.websiteUri ? "Found in Google Places" : "Website not listed",
-              confidence: p.websiteUri ? "medium" : "low", provider: "Google Places",
-              notes: "Discovered via Google Places Text Search. Confirm details before outreach.",
-              reason: "Directory discovery result; no purchase intent inferred.",
-              evidence: ["Source: Google Places API", p.formattedAddress || "Address not supplied", p.websiteUri ? "Website supplied by Google Places" : "Google Places did not supply a website"],
-              demo: false
-            });
-          }
-          pageToken = payload.nextPageToken || "";
-          if (!pageToken) break;
-        }
-        if (found.size >= target) break;
+      let geo = cache.get(geoKey);
+      if (!geo) {
+        const geoUrl = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location);
+        const geoResponse = await fetch(geoUrl, {
+          headers: { "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" },
+          signal: AbortSignal.timeout(12000)
+        });
+        if (!geoResponse.ok) throw new Error("OpenStreetMap location lookup failed (" + geoResponse.status + ")");
+        const geoResults = await geoResponse.json();
+        if (!geoResults.length) return json(res, 200, { provider: "OpenStreetMap + Overpass", query, location, requested: target, count: 0, results: [], note: "Location not found. Try a town, city, postcode, or full address." });
+        geo = { lat: Number(geoResults[0].lat), lon: Number(geoResults[0].lon), displayName: geoResults[0].display_name || location };
+        cache.set(geoKey, geo);
       }
-      return json(res, 200, { provider: "Google Places", query, location, requested: target, count: Math.min(found.size, target), results: [...found.values()].slice(0, target), note: "Google Places returns up to 20 results per page; results are deduplicated across related searches. Some listings do not include a website." });
+      const radius = Math.max(1000, Math.min(25000, Number(input?.radiusMeters) || 15000));
+      const overpassQuery = '[out:json][timeout:25];(nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["shop"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["office"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["craft"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["amenity"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["healthcare"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["tourism"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["leisure"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["industrial"];);out center tags 200;';
+      const overpassResponse = await fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8", "User-Agent": "TribusOpportunityRadar/1.0" },
+        body: "data=" + encodeURIComponent(overpassQuery),
+        signal: AbortSignal.timeout(35000)
+      });
+      if (!overpassResponse.ok) throw new Error("OpenStreetMap business search failed (" + overpassResponse.status + ")");
+      const payload = await overpassResponse.json();
+      const normalize = (s) => String(s || "").toLowerCase().replace(/[_-]+/g, " ").trim();
+      const terms = query.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2 && !["business","businesses","company","companies","local","independent","nearby","service","services","shop","shops"].includes(w));
+      const elements = payload.elements || [];
+      for (const p of elements) {
+        const tags = p.tags || {};
+        if (!tags.name) continue;
+        const point = p.type === "node" ? p : (p.center || {});
+        if (typeof point.lat !== "number" || typeof point.lon !== "number") continue;
+        const tagCategory = tags.shop || tags.office || tags.craft || tags.amenity || tags.healthcare || tags.tourism || tags.leisure || tags.industrial || "business";
+        const searchable = normalize([tags.name, tagCategory, tags.brand, tags.description].join(" "));
+        const matchCount = terms.filter(term => searchable.includes(term)).length;
+        const category = normalize(tagCategory).replace(/;/g, ", ") || query;
+        const addressParts = [
+          [tags["addr:housenumber"], tags["addr:street"]].filter(Boolean).join(" "),
+          tags["addr:suburb"] || tags["addr:city"] || tags["addr:town"] || tags["addr:village"],
+          tags["addr:state"],
+          tags["addr:postcode"]
+        ].filter(Boolean);
+        const address = addressParts.join(", ");
+        const city = tags["addr:city"] || tags["addr:town"] || tags["addr:village"] || tags["addr:suburb"] || location;
+        const website = tags.website || tags["contact:website"] || "";
+        const phone = tags.phone || tags["contact:phone"] || "";
+        const id = "osm-" + p.type + "-" + p.id;
+        const score = Math.min(88, 42 + matchCount * 12 + (website ? 8 : 0) + (phone ? 5 : 0));
+        found.set(id, {
+          id, sourceId: id, name: tags.name, category, city,
+          region: tags["addr:state"] || "", address, website, phone,
+          email: tags.email || tags["contact:email"] || "",
+          lat: point.lat, lon: point.lon, rating: null, reviewCount: 0,
+          mapsUrl: "https://www.openstreetmap.org/" + p.type + "/" + p.id,
+          score, status: "New",
+          websiteStatus: website ? "Listed in OpenStreetMap; not independently verified" : "Website not listed",
+          confidence: website ? "medium" : "low", provider: "OpenStreetMap",
+          notes: "Mapped business listing. Confirm current operating status and contact details before outreach.",
+          reason: "Discovered from OpenStreetMap tags; fit score is a rough category/contact-data heuristic, not purchase intent.",
+          evidence: ["Source: OpenStreetMap", address || "No street address supplied in map data", website ? "Website listed in map data; not independently verified" : "No website listed in map data", phone ? "Phone number listed in map data" : "No phone number listed in map data"],
+          demo: false
+        });
+      }
+      const all = [...found.values()];
+      all.sort((a, b) => {
+        const aMatch = terms.filter(term => normalize([a.name, a.category].join(" ")).includes(term)).length;
+        const bMatch = terms.filter(term => normalize([b.name, b.category].join(" ")).includes(term)).length;
+        return bMatch - aMatch || b.score - a.score || a.name.localeCompare(b.name);
+      });
+      const results = all.slice(0, target);
+      return json(res, 200, {
+        provider: "OpenStreetMap + Overpass", query, location, requested: target,
+        count: results.length, results,
+        note: "OpenStreetMap listings are community-maintained and may be incomplete. Websites and phone numbers are mapped data, not independently verified. Search area is within " + Math.round(radius / 1000) + " km of " + geo.displayName + "."
+      });
     } catch (error) {
-      return json(res, 502, { error: "Business discovery is temporarily unavailable.", detail: error.message });
+      return json(res, 502, { error: "OpenStreetMap business discovery is temporarily unavailable.", detail: error.message });
     }
   }
   if (url.pathname === "/api/verify-website" && req.method === "POST") {

@@ -126,14 +126,35 @@ const server = http.createServer(async (req, res) => {
         geo = cachedGeo;
       }
       const overpassQuery = '[out:json][timeout:25];(nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["shop"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["office"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["craft"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["amenity"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["healthcare"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["tourism"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["leisure"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["industrial"];);out body center 200;';
-      const overpassResponse = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8", "User-Agent": "TribusOpportunityRadar/1.0" },
-        body: "data=" + encodeURIComponent(overpassQuery),
-        signal: AbortSignal.timeout(35000)
-      });
-      if (!overpassResponse.ok) throw new Error("OpenStreetMap business search failed (" + overpassResponse.status + ")");
-      const payload = await overpassResponse.json();
+      // Public Overpass instances can rate-limit or become temporarily overloaded.
+      // Try multiple community endpoints so one unhealthy mirror does not break discovery.
+      const overpassEndpoints = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter"
+      ];
+      let payload = null;
+      const overpassErrors = [];
+      for (const endpoint of overpassEndpoints) {
+        try {
+          const overpassResponse = await fetch(endpoint, {
+            method: "POST",
+            headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8", "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" },
+            body: "data=" + encodeURIComponent(overpassQuery),
+            signal: AbortSignal.timeout(9000)
+          });
+          if (!overpassResponse.ok) {
+            overpassErrors.push(new URL(endpoint).hostname + ": HTTP " + overpassResponse.status);
+            continue;
+          }
+          payload = await overpassResponse.json();
+          break;
+        } catch (endpointError) {
+          overpassErrors.push(new URL(endpoint).hostname + ": " + (endpointError.name === "TimeoutError" ? "timed out" : endpointError.message));
+        }
+      }
+      if (!payload) throw new Error("All OpenStreetMap business search endpoints failed. " + overpassErrors.join("; "));
+
       const normalize = (s) => String(s || "").toLowerCase().replace(/[_-]+/g, " ").trim();
       const terms = query.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2 && !["business","businesses","company","companies","local","independent","nearby","service","services","shop","shops"].includes(w));
       const elements = payload.elements || [];

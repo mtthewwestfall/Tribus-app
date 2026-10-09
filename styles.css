@@ -42,9 +42,7 @@ body{background:var(--canvas);color:var(--ink)}
 .discover-message{background:#102f2c;color:#b8c9c0;border:1px solid #234841}
 .advanced-search{color:#e2c46b}
 .pin-controls #pinStatus,.pin-controls span{color:#a6b6af}
-.stat-label{color:#a6b6af}.stat-label span{color:#d4af37}.stat-value{color:#fff}.stat-foot{color:#9caf a8}
-.stat-foot{color:#9caf a8}
-.section-head,.map-head{border-color:#244545}
+.stat-label{color:#a6b6af}.stat-label span{color:#d4af37}.stat-value{color:#fff}.section-head,.map-head{border-color:#244545}
 .section-head h2,.map-head h2{color:#fff}
 .count-pill{background:#3b321d;color:#f0d27b}
 .lead-card{border-color:#203f3b}

@@ -73,7 +73,7 @@ async function discoverBusinesses(){
           lead.researchStatus=result.researchStatus||"Needs review";lead.researchSummary=result.researchSummary||"";
           lead.evidence=[...(item.evidence||[]),...(result.evidence||[])];
           if(result.verifiedUrl)lead.website=result.verifiedUrl;
-          if(result.sources?.length)lead.notes="Automated public-source research found "+result.sources.length+" source excerpt(s). Review each source; excerpts are not independent confirmation.";
+          if(result.sources?.length){lead.notes="Automated public-source research found "+result.sources.length+" source excerpt(s). Review each source; excerpts are not independent confirmation.";lead.reason="Potential category match based on mapped tags; public-source evidence was gathered for review. Fit and current operating status remain unconfirmed; no buyer intent is inferred.";}
         }
       }catch{}
       researched++;persist();render();

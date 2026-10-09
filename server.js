@@ -50,8 +50,8 @@ const server = http.createServer(async (req, res) => {
     const location = String(input?.location || "Manchester, UK").trim().slice(0, 120);
     const target = Math.max(1, Math.min(50, Number(input?.limit) || 50));
     if (!query || !location) return json(res, 400, { error: "Industry and location are required." });
-    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-    if (!apiKey) return json(res, 503, { error: "Google Places is not configured yet. Add GOOGLE_PLACES_API_KEY to this Railway service's Variables, then redeploy." });
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
+    if (!apiKey) return json(res, 503, { error: "Google Places is not configured yet. Add GOOGLE_MAPS_API_KEY or GOOGLE_PLACES_API_KEY to this Railway service's Variables, then redeploy. The key must have Places API (New) enabled." });
     const variants = [...new Set([query, query + " shops", query + " services", "independent businesses"])];
     const found = new Map();
     try {
@@ -76,6 +76,9 @@ const server = http.createServer(async (req, res) => {
           for (const p of payload.places || []) {
             if (!p.id || found.has(p.id)) continue;
             const loc = p.location || {};
+            const components = p.addressComponents || [];
+            const locality = components.find(c => (c.types || []).includes("locality")) || components.find(c => (c.types || []).includes("postal_town")) || {};
+            const region = components.find(c => (c.types || []).includes("administrative_area_level_1")) || {};
             found.set(p.id, {
               id: "google-" + p.id, sourceId: p.id,
               name: p.displayName?.text || "Unnamed business",

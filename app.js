@@ -57,8 +57,29 @@ async function discoverBusinesses(){
     }
     leads=leads.filter(l=>!l.demo);
     persist();render();
-    message.textContent="Found "+data.count+" real listings for “"+industry+"” in "+location+". Added "+added+" new leads"+(updated?", updated "+updated:"")+". "+(data.note||"Review each listing before outreach.");
+    message.textContent="Found "+data.count+" OpenStreetMap listings for “"+industry+"” in "+location+". Added "+added+" new leads"+(updated?", updated "+updated:"")+". Starting evidence research for up to 5 leads… "+(data.note||"");
     if(data.count===0)message.textContent="No listings returned for this query. Try a more specific business type or city.";
+    const researchBatch=(data.results||[]).slice(0,5);
+    let researched=0;
+    for(const item of researchBatch){
+      const lead=leads.find(l=>l.id===item.id);
+      if(!lead)continue;
+      try{
+        const rr=await fetch("/api/verify-website",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...lead,clientOffer:currentClient()?.offer||"",idealCustomer:currentClient()?.idealCustomer||""})});
+        const result=await rr.json();
+        if(rr.ok){
+          lead.websiteStatus=result.status;lead.provider=result.provider;lead.confidence=result.confidence;
+          lead.verifiedUrl=result.verifiedUrl||"";lead.candidates=result.candidates||[];lead.sources=result.sources||[];
+          lead.researchStatus=result.researchStatus||"Needs review";lead.researchSummary=result.researchSummary||"";
+          lead.evidence=[...(item.evidence||[]),...(result.evidence||[])];
+          if(result.verifiedUrl)lead.website=result.verifiedUrl;
+          if(result.sources?.length)lead.notes="Automated public-source research found "+result.sources.length+" source excerpt(s). Review each source; excerpts are not independent confirmation.";
+        }
+      }catch{}
+      researched++;persist();render();
+      message.textContent="Discovery complete: "+data.count+" listings. Research checked "+researched+"/"+researchBatch.length+" leads. "+(data.note||"");
+    }
+    if(researched)message.textContent+=" Automated research is evidence gathering, not proof of fit or buyer intent.";
   }catch(e){message.textContent=e.message+" You can still use the workspace manually; no demo records were imported as real leads."}
   finally{button.disabled=false;button.textContent="⌕ Discover businesses"}
 }

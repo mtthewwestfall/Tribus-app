@@ -141,8 +141,8 @@ const server = http.createServer(async (req, res) => {
     if (cache.has(String(business.id))) return json(res, 200, { ...cache.get(String(business.id)), cached: true });
     const apiKey = process.env.TAVILY_API_KEY;
     if (!apiKey) {
-      const result = { businessId: String(business.id), status: "Needs review", confidence: "low", provider: "mock", verifiedUrl: "", evidence: ["TAVILY_API_KEY is not configured; no website claim was made."], cached: false };
-      cache.set(String(business.id), result); return json(res, 200, result);
+      const result = { businessId: String(business.id), status: "Needs review", confidence: "low", provider: "not-configured", verifiedUrl: "", researchStatus: "Not researched", researchSummary: "Automated public-source research requires TAVILY_API_KEY. This listing has not been independently verified.", evidence: ["TAVILY_API_KEY is not configured; no website or business claims were verified."], candidates: [], sources: [], cached: false };
+      return json(res, 200, result);
     }
     try {
       const response = await fetch("https://api.tavily.com/search", {
@@ -154,12 +154,16 @@ const server = http.createServer(async (req, res) => {
       const ranked = scoreResult(business, payload.results || []);
       const best = ranked[0];
       const verified = Boolean(best && best.url && best.score >= 42);
+      const sources = (payload.results || []).slice(0, 5).map(r => ({ title: String(r.title || r.url || "Source").slice(0, 180), url: String(r.url || ""), excerpt: String(r.content || "").replace(/\\s+/g, " ").slice(0, 420) }));
+      const useful = sources.filter(s => s.url && s.excerpt);
+      const researchSummary = useful.length ? "Public search surfaced " + useful.length + " source excerpt(s). Review the linked evidence below; summaries are snippets and may be incomplete." : "Search returned no usable source excerpts. Verify manually before outreach.";
       const result = {
         businessId: String(business.id), status: verified ? "Website Found" : "Needs review",
         confidence: best && best.score >= 70 ? "high" : best && best.score >= 42 ? "medium" : "low",
         provider: "tavily", verifiedUrl: verified ? best.url : "", score: best?.score || 0,
-        evidence: verified ? best.evidence : ["No result met the deterministic matching threshold; review results manually."],
-        candidates: ranked.slice(0, 5).map(({url,title,score,evidence}) => ({url,title,score,evidence})), cached: false
+        researchStatus: useful.length ? "Public sources found — review required" : "Needs review", researchSummary,
+        evidence: [...(verified ? best.evidence : ["No result met the deterministic matching threshold; review results manually."]), ...useful.map(s => "Search source: " + s.title + " — " + s.excerpt)],
+        sources: useful, candidates: ranked.slice(0, 5).map(({url,title,score,evidence}) => ({url,title,score,evidence})), cached: false
       };
       cache.set(String(business.id), result); return json(res, 200, result);
     } catch (error) {

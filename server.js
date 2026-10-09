@@ -41,6 +41,67 @@ const server = http.createServer(async (req, res) => {
   }
   const url = new URL(req.url || "/", "http://localhost");
   if (url.pathname === "/api/health") return json(res, 200, { ok: true, app: "Tribus Opportunity Radar" });
+  if (url.pathname === "/api/discover" && req.method === "POST") {
+    let raw = "";
+    for await (const chunk of req) { raw += chunk; if (raw.length > 100_000) return json(res, 413, { error: "Request too large" }); }
+    let input;
+    try { input = JSON.parse(raw); } catch { return json(res, 400, { error: "Invalid JSON" }); }
+    const query = String(input?.industry || "local businesses").trim().slice(0, 100);
+    const location = String(input?.location || "Manchester, UK").trim().slice(0, 120);
+    const target = Math.max(1, Math.min(50, Number(input?.limit) || 50));
+    if (!query || !location) return json(res, 400, { error: "Industry and location are required." });
+    const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+    if (!apiKey) return json(res, 503, { error: "Google Places is not configured yet. Add GOOGLE_PLACES_API_KEY to this Railway service's Variables, then redeploy." });
+    const variants = [...new Set([query, query + " shops", query + " services", "independent businesses"])];
+    const found = new Map();
+    try {
+      for (const term of variants) {
+        let pageToken = "";
+        for (let page = 0; page < 3 && found.size < target; page++) {
+          const body = { textQuery: term + " in " + location, languageCode: "en", regionCode: "GB", pageSize: 20 };
+          if (pageToken) body.pageToken = pageToken;
+          const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+            method: "POST",
+            headers: { "content-type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.types,places.location,places.rating,places.userRatingCount,places.googleMapsUri,nextPageToken" },
+            body: JSON.stringify(body), signal: AbortSignal.timeout(15000)
+          });
+          if (!response.ok) {
+            const detail = await response.text();
+            const status = response.status === 401 || response.status === 403 ? 502 : 502;
+            return json(res, status, { error: "Google Places search failed. Check that Places API (New) is enabled and the key is valid and unrestricted to server-side use.", detail: detail.slice(0, 500) });
+          }
+          const payload = await response.json();
+          for (const p of payload.places || []) {
+            if (!p.id || found.has(p.id)) continue;
+            const loc = p.location || {};
+            found.set(p.id, {
+              id: "google-" + p.id, sourceId: p.id,
+              name: p.displayName?.text || "Unnamed business",
+              category: (p.types || []).filter(t => !["point_of_interest","establishment"].includes(t)).slice(0, 2).join(", ").replace(/_/g, " ") || query,
+              city: location, region: "Greater Manchester",
+              address: p.formattedAddress || "", website: p.websiteUri || "",
+              lat: typeof loc.latitude === "number" ? loc.latitude : null,
+              lon: typeof loc.longitude === "number" ? loc.longitude : null,
+              rating: p.rating ?? null, reviewCount: p.userRatingCount ?? 0,
+              mapsUrl: p.googleMapsUri || "", score: 50, status: "New",
+              websiteStatus: p.websiteUri ? "Found in Google Places" : "Website not listed",
+              confidence: p.websiteUri ? "medium" : "low", provider: "Google Places",
+              notes: "Discovered via Google Places Text Search. Confirm details before outreach.",
+              reason: "Directory discovery result; no purchase intent inferred.",
+              evidence: ["Source: Google Places API", p.formattedAddress || "Address not supplied", p.websiteUri ? "Website supplied by Google Places" : "Google Places did not supply a website"],
+              demo: false
+            });
+          }
+          pageToken = payload.nextPageToken || "";
+          if (!pageToken) break;
+        }
+        if (found.size >= target) break;
+      }
+      return json(res, 200, { provider: "Google Places", query, location, requested: target, count: Math.min(found.size, target), results: [...found.values()].slice(0, target), note: "Google Places returns up to 20 results per page; results are deduplicated across related searches. Some listings do not include a website." });
+    } catch (error) {
+      return json(res, 502, { error: "Business discovery is temporarily unavailable.", detail: error.message });
+    }
+  }
   if (url.pathname === "/api/verify-website" && req.method === "POST") {
     let raw = "";
     for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) return json(res, 413, { error: "Request too large" }); }

@@ -19,7 +19,7 @@ async function inspectPublicWebsite(input) {
     const h = u.hostname.toLowerCase();
     return ["http:", "https:"].includes(u.protocol) && !u.username && !u.password &&
       !["localhost", "localhost.localdomain"].includes(h) && !h.endsWith(".local") &&
-      !h.endsWith(".internal") && !/^\\d{1,3}(?:\\.\\d{1,3}){3}$/.test(h) && h.includes(".");
+      !h.endsWith(".internal") && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(h) && h.includes(".");
   };
   if (!safe(current)) return null;
   for (let hop = 0; hop < 4; hop++) {
@@ -37,12 +37,12 @@ async function inspectPublicWebsite(input) {
     }
     if (!response.ok || !(response.headers.get("content-type") || "").includes("text/html")) return null;
     const html = (await response.text()).slice(0, 500000);
-    const strip = (v) => String(v || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\\s+/g, " ").trim();
-    const title = strip((html.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i) || [])[1] || "");
+    const strip = (v) => String(v || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
+    const title = strip((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || "");
     const descriptionMatch = html.match(/<meta[^>]+(?:name|property)=["'](?:description|og:description|twitter:description)["'][^>]+content=["']([^"']*)["']/i) || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property)=["'](?:description|og:description|twitter:description)["']/i);
     const description = strip(descriptionMatch?.[1] || "");
-    const emails = [...new Set((html.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi) || []).filter(x => !/example\\.|wixpress|sentry/i.test(x)))].slice(0, 3);
-    const phones = [...new Set((html.match(/(?:\\+?\\d[\\d ().-]{7,}\\d)/g) || []).map(x => x.trim()).filter(x => x.replace(/\\D/g, "").length >= 9 && x.replace(/\\D/g, "").length <= 15))].slice(0, 3);
+    const emails = [...new Set((html.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []).filter(x => !/example\.|wixpress|sentry/i.test(x)))].slice(0, 3);
+    const phones = [...new Set((html.match(/(?:\+?\d[\d ().-]{7,}\d)/g) || []).map(x => x.trim()).filter(x => x.replace(/\D/g, "").length >= 9 && x.replace(/\D/g, "").length <= 15))].slice(0, 3);
     return { url: current.href, title: title.slice(0, 180), description: description.slice(0, 500), emails, phones, excerpt: strip(html).slice(0, 420) };
   }
   return null;

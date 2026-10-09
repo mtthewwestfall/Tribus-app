@@ -6,25 +6,32 @@ A lightweight lead-discovery workspace for researching local businesses, reviewi
 - Requires Node.js 20+
 - Run `npm start`
 - Open `http://localhost:3000`
-- Set `TAVILY_API_KEY` in the environment to enable server-side website verification. Set `GOOGLE_PLACES_API_KEY` to enable live business discovery. Keep both keys in Railway service variables; neither key is sent to the browser.
+- Set `TAVILY_API_KEY` in the environment to enable server-side website verification. Business discovery uses OpenStreetMap data through Nominatim and Overpass; it does not require a Google Places API key. Keep any API keys in server-side environment variables, never in browser code or Git.
 
 ## Features
 - Business opportunity and customer prospect modes
+- Live business discovery using OpenStreetMap + Overpass, with location lookup and up to 50 imported listings per search
 - Interactive Leaflet map, radius and category filters
 - Evidence-aware lead scoring and confidence indicators
-- Live business discovery through Google Places API (New) Text Search, with deduplication and up to 50 imported listings per search\n- Server-side Tavily Basic Search verification with deterministic matching and business-ID caching
+- Server-side Tavily Basic Search verification with deterministic matching and business-ID caching
 - Website verification fallback when no API key is configured
 - Per-lead printable report, CSV export, editable pipeline status, and client profiles stored in the browser
 - No fabricated phone numbers or buyer-intent claims
 
+## Live business discovery
+
+1. Enter a business type and a town, city, postcode, or address in **Discover businesses**.
+2. Tribus uses OpenStreetMap's Nominatim service to geocode the location, then queries the Overpass API for mapped businesses within the selected radius.
+3. Results include mapped names, categories, coordinates, and any address, website, phone, or email tags that contributors have supplied.
+
+No Google Places API key or Google Places billing setup is required for this discovery path. OpenStreetMap data is community-maintained, so coverage varies: some real businesses will be missing, and many listings will not include contact details. Listed websites and phone numbers are not independently verified. A listing or fit score does not establish purchase intent; review evidence before outreach.
+
+The app caches location lookups in memory to avoid repeated geocoding during a running process. Please use the public Nominatim and Overpass services responsibly and follow their usage policies; do not turn this endpoint into high-volume or automated bulk harvesting. OpenStreetMap data is © OpenStreetMap contributors and is made available under the Open Database License (ODbL).
+
+## Website verification
+
+Set `TAVILY_API_KEY` in the Railway service variables to enable server-side website verification. Without it, Tribus clearly marks website verification as needing review rather than claiming a website is verified.
+
 ## Notes
+
 This repository is a fresh implementation scaffold. The original Replit workspace was not directly accessible during initial setup, so its private source and existing runtime data have not been imported. Website verification is a new implementation based on the requested behavior; compare it against the Replit version before replacing that app.
-
-## Enable live business discovery
-
-1. In [Google Cloud Console](https://console.cloud.google.com/), select or create a project and enable **Places API (New)**.
-2. Enable billing for that project, create an API key, and restrict it to the Places API. Google Places is pay-as-you-go; review the current [usage and billing documentation](https://developers.google.com/maps/documentation/places/web-service/usage-and-billing) before searching.
-3. In Railway, open the **Tribus-app-preview** service → **Variables** and add `GOOGLE_PLACES_API_KEY` with the key value. Railway will redeploy the service. Never put the key in frontend code or commit it to GitHub.
-4. Open the deployed app, use **Discover real businesses**, enter a business type and location, then choose 10, 25, or 50 results.
-
-The app uses Google's Text Search (New) endpoint with a field mask, requests website/address/map information when available, and labels source and evidence. Google Text Search returns up to 60 results per individual query; the app runs several related searches and deduplicates results to try to reach the requested count. Actual counts can be lower. “United States” is a very broad search area, so results may not represent a balanced national sample; for higher-quality prospecting, search one city/state or metro at a time (for example, “dentists” in “Austin, TX”). Some listings have no website, and directory presence does not prove buyer intent. Google API costs depend on the fields requested and current pricing.

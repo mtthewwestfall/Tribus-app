@@ -58,11 +58,11 @@ const server = http.createServer(async (req, res) => {
       for (const term of variants) {
         let pageToken = "";
         for (let page = 0; page < 3 && found.size < target; page++) {
-          const body = { textQuery: term + " in " + location, languageCode: "en", regionCode: "GB", pageSize: 20 };
+          const isUS = /\\b(united states|usa|u\\.s\\.|u\\.s\\.a\\.)\\b/i.test(location) || /\\b(US|USA)\\b/i.test(location);\n          const isUK = /\\b(united kingdom|uk|great britain|england|manchester)\\b/i.test(location);\n          const body = { textQuery: term + " in " + location, languageCode: "en", ...(isUS ? {regionCode:"US"} : isUK ? {regionCode:"GB"} : {}), pageSize: 20 };
           if (pageToken) body.pageToken = pageToken;
           const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
             method: "POST",
-            headers: { "content-type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.websiteUri,places.types,places.location,places.rating,places.userRatingCount,places.googleMapsUri,nextPageToken" },
+            headers: { "content-type": "application/json", "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.addressComponents,places.websiteUri,places.types,places.location,places.rating,places.userRatingCount,places.googleMapsUri,nextPageToken" },
             body: JSON.stringify(body), signal: AbortSignal.timeout(15000)
           });
           if (!response.ok) {
@@ -78,7 +78,7 @@ const server = http.createServer(async (req, res) => {
               id: "google-" + p.id, sourceId: p.id,
               name: p.displayName?.text || "Unnamed business",
               category: (p.types || []).filter(t => !["point_of_interest","establishment"].includes(t)).slice(0, 2).join(", ").replace(/_/g, " ") || query,
-              city: location, region: "Greater Manchester",
+              city: locality?.longText || location, region: region?.shortText || region?.longText || "",
               address: p.formattedAddress || "", website: p.websiteUri || "",
               lat: typeof loc.latitude === "number" ? loc.latitude : null,
               lon: typeof loc.longitude === "number" ? loc.longitude : null,

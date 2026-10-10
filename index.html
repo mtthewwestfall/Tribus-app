@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#072222"><title>Tribus · Opportunity Radar</title>
+  <meta name="theme-color" content="#072222"><title>Tribus Radar · Local Business Intelligence</title>
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <aside class="sidebar">
-    <div class="brand"><div class="brand-mark" aria-hidden="true"><span></span></div><div><b>tribus</b><small>GROWTH INTELLIGENCE</small></div></div>
+    <div class="brand"><div class="brand-mark" aria-hidden="true"><span></span></div><div><b>tribus</b><small>LOCAL BUSINESS INTELLIGENCE</small></div></div>
     <div class="workspace-label">WORKSPACE</div>
     <button class="nav-item active" data-nav="radar"><span>⌖</span> Opportunity Radar</button>
     <button class="nav-item" data-nav="pipeline"><span>▤</span> Lead pipeline <span class="nav-count" id="pipelineCount">0</span></button>
@@ -20,7 +20,7 @@
   <main class="main">
     <header class="topbar"><div class="crumb">Workspace <span>/</span> <b id="crumbTitle">Opportunity Radar</b></div><div class="top-actions"><span class="live-dot"></span><span>Research workspace</span><button class="btn btn-light" id="exportBtn">↓ Export CSV</button></div></header>
     <section id="radarView">
-      <div class="page-heading"><div><div class="eyebrow">DISCOVER · QUALIFY · GROW</div><h1>Opportunity Radar</h1><p>Find the right businesses, understand the evidence, and turn promising leads into action.</p></div><button class="btn btn-dark" id="newLeadBtn">＋ Add a lead</button></div>
+      <div class="page-heading"><div><div class="eyebrow">DISCOVER · QUALIFY · GROW</div><h1>Tribus Radar</h1><p>Find opportunity. Win clients. Discover local businesses, spot marketing gaps, and turn insight into outreach.</p></div><button class="btn btn-dark" id="newLeadBtn">＋ Add a lead</button></div>
       <div class="discover-panel">
         <div class="discover-heading"><div><b>Find businesses near you</b><p>Enter what you’re looking for and where. We’ll find local listings and gather public evidence.</p></div></div>
         <div class="discover-fields"><label>Business type (optional)<input id="discoverIndustry" value="" placeholder="Any business type — or leave blank for all" autocomplete="off"></label><label>Where should we search?<input id="discoverLocation" value="" placeholder="City, region or postcode" autocomplete="off"></label><select id="discoverLimit" aria-label="Number of results"><option value="10">10</option><option value="25" selected>25</option><option value="50">50</option></select><button class="btn btn-dark" id="discoverBtn">Find businesses</button></div>

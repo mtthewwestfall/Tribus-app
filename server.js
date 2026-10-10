@@ -116,11 +116,18 @@ const server = http.createServer(async (req, res) => {
       } else {
         const geoKey = "geo:" + location.toLowerCase(); let cachedGeo = cache.get(geoKey);
         if (!cachedGeo) {
-          const geoUrl = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location);
-          const geoResponse = await fetch(geoUrl, { headers: { "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" }, signal: AbortSignal.timeout(12000) });
-          if (!geoResponse.ok) throw new Error("OpenStreetMap location lookup failed (" + geoResponse.status + ")");
-          const geoResults = await geoResponse.json();
-          if (!geoResults.length) return json(res, 200, { provider: "OpenStreetMap + Overpass", query, location, requested: target, count: 0, results: [], note: "Location not found. Try a town, city, postcode, or full address." });
+          const postcodeOnly = /^[a-z0-9][a-z0-9 -]{2,10}$/i.test(location) && /\d/.test(location);
+          const geoUrls = postcodeOnly
+            ? ["https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&postalcode=" + encodeURIComponent(location), "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location)]
+            : ["https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location)];
+          let geoResults = [];
+          for (const geoUrl of geoUrls) {
+            const geoResponse = await fetch(geoUrl, { headers: { "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" }, signal: AbortSignal.timeout(12000) });
+            if (!geoResponse.ok) throw new Error("OpenStreetMap location lookup failed (" + geoResponse.status + ")");
+            geoResults = await geoResponse.json();
+            if (geoResults.length) break;
+          }
+          if (!geoResults.length) return json(res, 200, { provider: "OpenStreetMap + Overpass", query, location, requested: target, count: 0, results: [], note: "Location not found. Try a ZIP code, postal code, town, city, or full address." });
           cachedGeo = { lat: Number(geoResults[0].lat), lon: Number(geoResults[0].lon), displayName: geoResults[0].display_name || location }; cache.set(geoKey, cachedGeo);
         }
         geo = cachedGeo;

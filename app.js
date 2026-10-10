@@ -50,10 +50,10 @@ function editClient(id){const c=clients.find(x=>x.id===id);if(!c)return;const na
 async function discoverBusinesses(){
   const industry=$("discoverIndustry").value.trim(), location=$("discoverLocation").value.trim(), limit=Number($("discoverLimit").value)||50;
   const button=$("discoverBtn"), message=$("discoverMessage");
-  if(!industry||!location){message.textContent="Enter a business type and a location first.";return}
+  if(!location){message.textContent="Enter a city, ZIP/postal code, or choose a point on the map. Business type is optional.";return}
   button.disabled=true;button.textContent="Searching…";message.textContent="Searching OpenStreetMap for mapped business listings near your location. This can take a few seconds…";
   try{
-    const response=await fetch("/api/discover",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({industry,location,limit,radiusMeters:Number($("radiusFilter").value||15)*1000,...(searchCenter?{lat:searchCenter.lat,lon:searchCenter.lon}:{})})});
+    const response=await fetch("/api/discover",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({industry:industry||"local businesses",location,limit,radiusMeters:Number($("radiusFilter").value||15)*1000,...(searchCenter?{lat:searchCenter.lat,lon:searchCenter.lon}:{})})});
     const data=await response.json();
     if(!response.ok){const detail=typeof data.detail==="string"?data.detail:"";throw new Error([data.error||"Discovery failed",detail].filter(Boolean).join(" — "))}
     let added=0,updated=0;
@@ -64,8 +64,8 @@ async function discoverBusinesses(){
     }
     leads=leads.filter(l=>!l.demo);
     persist();render();
-    message.textContent="Found "+data.count+" OpenStreetMap listings for “"+industry+"” in "+location+". Added "+added+" new leads"+(updated?", updated "+updated:"")+". Starting evidence research for up to 5 leads… "+(data.note||"");
-    if(data.count===0)message.textContent="No listings returned for this query. Try a more specific business type or city.";
+    message.textContent="Found "+data.count+" OpenStreetMap listings for “"+(industry||"all business types")+"” in "+location+". Added "+added+" new leads"+(updated?", updated "+updated:"")+". Starting evidence research for up to 5 leads… "+(data.note||"");
+    if(data.count===0)message.textContent=data.note||("No listings were returned near "+location+". Try a larger search radius or choose a nearby point on the map.");
     const researchBatch=(data.results||[]).slice(0,5);
     let researched=0;
     for(const item of researchBatch){

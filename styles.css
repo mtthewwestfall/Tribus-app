@@ -160,3 +160,6 @@ footer{color:#79958a}
 
 /* High-contrast search pin: intentionally independent of Leaflet image assets. */
 .tribus-search-pin-icon{background:transparent!important;border:0!important}.tribus-search-pin{position:relative;display:block;width:30px;height:30px;margin:2px auto 0;background:#d4ad55;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 9px #0009;outline:2px solid #153b35}.tribus-search-pin i{position:absolute;display:block;width:8px;height:8px;left:8px;top:8px;border-radius:50%;background:#103b34;border:1px solid #fff}.pin-picker-modal #pinPickerMap{touch-action:pan-x pan-y;overscroll-behavior:contain}.pin-picker-modal .leaflet-marker-icon{cursor:grab;}
+
+/* Distinct search-center marker, separate from the blue radius circle. */
+.tribus-center-pin-icon{background:transparent!important;border:0!important}.tribus-center-pin{position:relative;display:block;width:34px;height:34px;margin:2px auto 0;background:#d4ad55;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 10px #000b;outline:2px solid #153b35}.tribus-center-pin i{position:absolute;display:block;width:10px;height:10px;left:9px;top:9px;border-radius:50%;background:#103b34;border:1px solid #fff}

@@ -125,13 +125,14 @@ const server = http.createServer(async (req, res) => {
         }
         geo = cachedGeo;
       }
-      const overpassQuery = '[out:json][timeout:8];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"][~"^(shop|office|craft|amenity|healthcare|tourism|leisure|industrial)$"~".+"];out body center 100;';
+      const overpassQuery = '[out:json][timeout:12];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"][~"^(shop|office|craft|amenity|healthcare|tourism|leisure|industrial)$"~".+"];out body center;';
       // Public Overpass instances can rate-limit or become temporarily overloaded.
       // Try multiple community endpoints so one unhealthy mirror does not break discovery.
       const overpassEndpoints = [
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
         "https://overpass-api.de/api/interpreter",
-        "https://overpass.kumi.systems/api/interpreter",
-        "https://overpass.private.coffee/api/interpreter"
+        "https://ethiopia.overpass.openplaceguide.org/api/interpreter"
       ];
       let payload = null;
       const overpassErrors = [];

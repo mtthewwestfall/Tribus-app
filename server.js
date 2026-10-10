@@ -77,6 +77,36 @@ async function inspectPublicWebsite(input) {
   return null;
 }
 
+async function searchPublicWeb(business) {
+  const base = [business.name, business.city, business.region].filter(Boolean).join(" ").trim();
+  if (!base) return [];
+  const results = [];
+  for (const query of [base + " official website", base + " contact"]) {
+    try {
+      const response = await fetch("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query), {
+        headers: { "user-agent": "Mozilla/5.0 (compatible; TribusOpportunityRadar/1.0)", "accept": "text/html" },
+        signal: AbortSignal.timeout(7000)
+      });
+      if (!response.ok) continue;
+      const html = (await response.text()).slice(0, 400000);
+      const links = [...html.matchAll(/<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/gi)];
+      for (const m of links) {
+        const clean = v => String(v || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\\s+/g, " ").trim();
+        let target;
+        try {
+          const raw = m[1].replace(/&amp;/g, "&");
+          const wrapped = new URL(raw, "https://html.duckduckgo.com");
+          target = new URL(wrapped.searchParams.get("uddg") || raw);
+          if (!["http:","https:"].includes(target.protocol) || !target.hostname.includes(".") || /(^|\\.)duckduckgo\\.com$/i.test(target.hostname)) continue;
+        } catch { continue; }
+        const title = clean(m[2]);
+        if (title && !results.some(x => x.url === target.href)) results.push({title,url:target.href,content:"Public search result; official ownership needs confirmation."});
+      }
+    } catch {}
+  }
+  return results.slice(0, 12);
+}
+
 function scoreResult(business, results = []) {
   const norm = (v) => String(v || "").toLowerCase().replace(/^www\./, "").replace(/[^a-z0-9]+/g, " ").trim();
   const name = norm(business.name);
@@ -304,12 +334,50 @@ const server = http.createServer(async (req, res) => {
     if (cache.has(String(business.id))) return json(res, 200, { ...cache.get(String(business.id)), cached: true });
     const apiKey = process.env.TAVILY_API_KEY;
     if (!apiKey) {
-      const page = business.website ? await inspectPublicWebsite(String(business.website)) : null;
-      const sources = page ? [{ title: page.title || page.url, url: page.url, excerpt: [page.description, page.excerpt].filter(Boolean).join(" ").slice(0, 420) }] : [];
-      const evidence = ["Research mode: direct public website inspection (no paid search API).", ...(page?.title ? ["Website title: " + page.title] : []), ...(page?.description ? ["Website meta description: " + page.description] : []), ...(page?.emails?.length ? ["Email address(es) visible in website HTML: " + page.emails.join(", ") + " (not independently verified)"] : []), ...(page?.phones?.length ? ["Phone-like number(s) visible in website HTML: " + page.phones.join(", ") + " (not independently verified)"] : [])];
-      const result = { businessId: String(business.id), status: page ? "Website Inspected — review required" : "Needs review", confidence: "low", provider: "direct-website", verifiedUrl: page?.url || "", researchStatus: page ? "Website inspected — review required" : "Limited research — review required", researchSummary: page ? "Read public page metadata and visible text from the listed website. This does not confirm ownership, current operation, service area, or buyer intent." : business.website ? "The listed website could not be safely fetched or did not return a readable public HTML page. Verify manually." : "No website is present in the map listing. Without a search API, external business discovery is limited to the mapped listing and its tags.", evidence, candidates: [], sources, websiteDetails: page ? { title: page.title, description: page.description, emails: page.emails, phones: page.phones, marketingAudit: page.marketingAudit } : null, marketingAudit: page?.marketingAudit || null, cached: false };
-      cache.set(String(business.id), result);
-      return json(res, 200, result);
+      const suppliedWebsite = String(business.website || "").trim();
+      const page = suppliedWebsite ? await inspectPublicWebsite(suppliedWebsite) : null;
+      const publicResults = page ? [] : await searchPublicWeb(business);
+      const ranked = scoreResult(business, publicResults);
+      const isDirectory = value => {
+        try { return /(^|\\.)(facebook|instagram|yelp|yellowpages|mapquest|tripadvisor|linkedin|tiktok|youtube|foursquare|bbb|chamberofcommerce|nextdoor)\\.com$/i.test(new URL(value).hostname.replace(/^www\\./,"")); } catch { return true; }
+      };
+      const best = ranked.find(r => !isDirectory(r.url));
+      const candidateFound = Boolean(!page && best && best.score >= 55);
+      const inspected = candidateFound ? await inspectPublicWebsite(best.url) : page;
+      const sources = [
+        ...(inspected ? [{title:inspected.title || inspected.url,url:inspected.url,excerpt:[inspected.description,inspected.excerpt].filter(Boolean).join(" ").slice(0,420)}] : []),
+        ...ranked.slice(0,8).map(r=>({title:r.title,url:r.url,excerpt:r.content}))
+      ].filter((s,i,arr)=>s.url && arr.findIndex(x=>x.url===s.url)===i);
+      const found = Boolean(page || candidateFound);
+      const result = {
+        businessId:String(business.id),
+        status: page ? "Website Inspected — review required" : candidateFound ? "Website Candidate Found — confirm ownership" : publicResults.length ? "No official website identified — review results" : "Unable to determine — search unavailable",
+        confidence: found ? (candidateFound ? "medium" : "low") : "low",
+        provider:"public-web-search + direct-website",
+        verifiedUrl: page?.url || (candidateFound ? best.url : ""),
+        researchStatus: found ? "Public web evidence found — review required" : "Unconfirmed — no website listing is not proof none exists",
+        researchSummary: found
+          ? "A listed site or likely candidate was found. Confirm it belongs to this exact business before outreach."
+          : publicResults.length
+            ? "Public search returned results, but none met the official-site matching threshold. Review the candidate links; this does not prove the business has no website."
+            : "Public search results were unavailable or inaccessible. Website status remains unknown; no absence claim is made.",
+        evidence:[
+          "Research mode: public web search plus direct website inspection; no additional API key required.",
+          ...(page ? ["Inspected the website already listed on the business record."] : []),
+          ...(candidateFound ? ["Likely official-site candidate matched business-name signals; ownership still needs confirmation."] : []),
+          ...(!suppliedWebsite && !candidateFound && publicResults.length ? ["No search result met the confidence threshold for an official website."] : []),
+          ...(!suppliedWebsite && !publicResults.length ? ["Search was unavailable or returned no parseable results; this is not proof no website exists."] : []),
+          ...(inspected?.title ? ["Website title: " + inspected.title] : []),
+          ...(inspected?.description ? ["Website meta description: " + inspected.description] : []),
+          ...(inspected?.emails?.length ? ["Email address(es) visible in website HTML: " + inspected.emails.join(", ") + " (not independently verified)"] : []),
+          ...(inspected?.phones?.length ? ["Phone-like number(s) visible in website HTML: " + inspected.phones.join(", ") + " (not independently verified)"] : [])
+        ],
+        candidates:ranked.slice(0,8).map(({url,title,score,evidence})=>({url,title,score,evidence})),
+        sources, websiteDetails:inspected ? {title:inspected.title,description:inspected.description,emails:inspected.emails,phones:inspected.phones,marketingAudit:inspected.marketingAudit} : null,
+        marketingAudit:inspected?.marketingAudit || null,cached:false
+      };
+      cache.set(String(business.id),result);
+      return json(res,200,result);
     }
     try {
       const response = await fetch("https://api.tavily.com/search", {

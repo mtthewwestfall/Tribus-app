@@ -89,15 +89,15 @@ async function searchPublicWeb(business) {
       });
       if (!response.ok) continue;
       const html = (await response.text()).slice(0, 400000);
-      const links = [...html.matchAll(/<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\\s\\S]*?)<\\/a>/gi)];
+      const links = [...html.matchAll(/<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
       for (const m of links) {
-        const clean = v => String(v || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\\s+/g, " ").trim();
+        const clean = v => String(v || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
         let target;
         try {
           const raw = m[1].replace(/&amp;/g, "&");
           const wrapped = new URL(raw, "https://html.duckduckgo.com");
           target = new URL(wrapped.searchParams.get("uddg") || raw);
-          if (!["http:","https:"].includes(target.protocol) || !target.hostname.includes(".") || /(^|\\.)duckduckgo\\.com$/i.test(target.hostname)) continue;
+          if (!["http:","https:"].includes(target.protocol) || !target.hostname.includes(".") || target.hostname === "duckduckgo.com" || target.hostname.endsWith(".duckduckgo.com")) continue;
         } catch { continue; }
         const title = clean(m[2]);
         if (title && !results.some(x => x.url === target.href)) results.push({title,url:target.href,content:"Public search result; official ownership needs confirmation."});

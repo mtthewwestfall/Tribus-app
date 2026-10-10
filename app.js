@@ -64,9 +64,9 @@ function printReport(id){const l=leads.find(x=>x.id===id);if(!l)return;const w=w
 function exportCSV(){const rows=visibleLeads();const fields=["name","category","city","region","website","websiteStatus","provider","confidence","score","status","reason","notes"];const csv=[fields.join(","),...rows.map(l=>fields.map(k=>'"'+String(l[k]??"").replace(/"/g,'""')+'"').join(","))].join("\\r\\n");const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="tribus-opportunity-radar-leads.csv";a.click();URL.revokeObjectURL(a.href)}
 function editClient(id){const c=clients.find(x=>x.id===id);if(!c)return;const name=prompt("Client profile name",c.name);if(name===null)return;if(!name.trim())return alert("A profile name is required.");c.name=name.trim();const offer=prompt("Offer / service description",c.offer||"");if(offer!==null)c.offer=offer;const ideal=prompt("Ideal customer profile",c.idealCustomer||"");if(ideal!==null)c.idealCustomer=ideal;persist();refreshClientSelect();renderClients()}
 async function discoverBusinesses(){
-  const industry=$("discoverIndustry").value.trim(), location=$("discoverLocation").value.trim(), limit=Number($("discoverLimit").value)||50;
+  const industry=$("discoverIndustry").value.trim(), typedLocation=$("discoverLocation").value.trim(), location=typedLocation||(searchCenter?("Pinned location "+searchCenter.lat.toFixed(5)+", "+searchCenter.lon.toFixed(5)):""), limit=Number($("discoverLimit").value)||50;
   const button=$("discoverBtn"), message=$("discoverMessage");
-  if(!location){message.textContent="Enter a city, ZIP/postal code, or choose a point on the map. Business type is optional.";return}
+  if(!location&&!searchCenter){message.textContent="Enter a city or ZIP/postal code, or drop a pin on the map. Business type is optional.";return}
   button.disabled=true;button.textContent="Searching…";message.textContent="Searching OpenStreetMap for mapped business listings near your location. This can take a few seconds…";
   try{
     const response=await fetch("/api/discover",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({industry:industry||"local businesses",location,limit,radiusMeters:Number($("radiusFilter").value||15)*1000,...(searchCenter?{lat:searchCenter.lat,lon:searchCenter.lon}:{})})});

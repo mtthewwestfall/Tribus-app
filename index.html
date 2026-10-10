@@ -13,6 +13,7 @@
     <div class="workspace-label">WORKSPACE</div>
     <button class="nav-item active" data-nav="radar"><span>⌖</span> Opportunity Radar</button>
     <button class="nav-item" data-nav="pipeline"><span>▤</span> Lead pipeline <span class="nav-count" id="pipelineCount">0</span></button>
+    <button class="nav-item" data-nav="saved"><span>☆</span> Saved leads <span class="nav-count" id="savedCount">0</span></button>
     <button class="nav-item" data-nav="clients"><span>♧</span> Client profiles</button>
     <div class="sidebar-bottom"><div class="avatar">TR</div><div><b>Tribus workspace</b><small>Local workspace</small></div><button id="settingsBtn" class="icon-button" aria-label="Settings">⚙</button></div>
   </aside>
@@ -32,6 +33,7 @@
       <section class="map-panel"><div class="map-head"><div><h2>Market map</h2><p><span class="map-legend"></span> Leads matching your filters</p></div><button id="mapFitBtn" class="icon-button" aria-label="Fit map to leads" title="Fit map to leads">⛶</button></div><div id="map"></div><div class="map-foot"><span>⌖</span> Select a pin to inspect a lead</div></section></div>
     </section>
     <section id="pipelineView" class="alternate-view hidden"><div class="page-heading"><div><div class="eyebrow">MANAGE RELATIONSHIPS</div><h1>Lead pipeline</h1><p>Track the next step for each opportunity.</p></div><button class="btn btn-light" id="pipelineExport">↓ Export CSV</button></div><div id="pipelineContent" class="pipeline-board"></div></section>
+    <section id="savedView" class="alternate-view hidden"><div class="page-heading"><div><div class="eyebrow">YOUR SHORTLIST</div><h1>Saved leads</h1><p>Keep promising businesses in one place while you research and plan outreach.</p></div><button class="btn btn-light" id="savedExport">↓ Export saved CSV</button></div><div id="savedContent" class="saved-leads-list"></div><div id="savedEmpty" class="empty-state"><div class="empty-icon">☆</div><b>No saved leads yet</b><p>On Opportunity Radar, select “Save lead” on any business to add it here.</p></div></section>
     <section id="clientsView" class="alternate-view hidden"><div class="page-heading"><div><div class="eyebrow">PERSONALIZE YOUR RESEARCH</div><h1>Client profiles</h1><p>Keep research criteria organized by client or campaign.</p></div><button class="btn btn-dark" id="addClientBtn">＋ New profile</button></div><div id="clientsContent" class="client-cards"></div></section>
     <footer>TRIBUS OPPORTUNITY RADAR <span>·</span> Research support, not a guarantee of fit or intent.</footer>
   </main>

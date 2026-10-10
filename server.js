@@ -125,7 +125,7 @@ const server = http.createServer(async (req, res) => {
         }
         geo = cachedGeo;
       }
-      const overpassQuery = '[out:json][timeout:25];(nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["shop"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["office"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["craft"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["amenity"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["healthcare"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["tourism"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["leisure"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["industrial"];);out body center 200;';
+      const overpassQuery = '[out:json][timeout:18];(nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["shop"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["office"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["craft"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["amenity"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["healthcare"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["tourism"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["leisure"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["industrial"];);out body center 200;';
       // Public Overpass instances can rate-limit or become temporarily overloaded.
       // Try multiple community endpoints so one unhealthy mirror does not break discovery.
       const overpassEndpoints = [
@@ -141,7 +141,7 @@ const server = http.createServer(async (req, res) => {
             method: "POST",
             headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8", "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" },
             body: "data=" + encodeURIComponent(overpassQuery),
-            signal: AbortSignal.timeout(9000)
+            signal: AbortSignal.timeout(18000)
           });
           if (!overpassResponse.ok) {
             overpassErrors.push(new URL(endpoint).hostname + ": HTTP " + overpassResponse.status);

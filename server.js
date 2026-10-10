@@ -321,6 +321,7 @@ const server = http.createServer(async (req, res) => {
       const ranked = scoreResult(business, payload.results || []);
       const best = ranked[0];
       const verified = Boolean(best && best.url && best.score >= 42);
+      const marketingPage = await inspectPublicWebsite(verified ? best.url : (business.website || ""));
       const sources = (payload.results || []).slice(0, 5).map(r => ({ title: String(r.title || r.url || "Source").slice(0, 180), url: String(r.url || ""), excerpt: String(r.content || "").replace(/\\s+/g, " ").slice(0, 420) }));
       const useful = sources.filter(s => s.url && s.excerpt);
       const researchSummary = useful.length ? "Public search surfaced " + useful.length + " source excerpt(s). Review the linked evidence below; summaries are snippets and may be incomplete." : "Search returned no usable source excerpts. Verify manually before outreach.";
@@ -330,7 +331,7 @@ const server = http.createServer(async (req, res) => {
         provider: "tavily", verifiedUrl: verified ? best.url : "", score: best?.score || 0,
         researchStatus: useful.length ? "Public sources found — review required" : "Needs review", researchSummary,
         evidence: [...(verified ? best.evidence : ["No result met the deterministic matching threshold; review results manually."]), ...useful.map(s => "Search source: " + s.title + " — " + s.excerpt)],
-        sources: useful, candidates: ranked.slice(0, 5).map(({url,title,score,evidence}) => ({url,title,score,evidence})), cached: false
+        sources: useful, candidates: ranked.slice(0, 5).map(({url,title,score,evidence}) => ({url,title,score,evidence})), websiteDetails: marketingPage ? { title: marketingPage.title, description: marketingPage.description, emails: marketingPage.emails, phones: marketingPage.phones, marketingAudit: marketingPage.marketingAudit } : null, marketingAudit: marketingPage?.marketingAudit || null, cached: false
       };
       cache.set(String(business.id), result); return json(res, 200, result);
     } catch (error) {

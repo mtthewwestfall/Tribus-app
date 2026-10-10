@@ -157,3 +157,6 @@ footer{color:#79958a}
 @media(max-width:720px){.sidebar{background:#0b2b2b}.brand-mark{width:32px;height:32px}.main>section{padding:20px 13px}.page-heading h1{font-size:25px}.discover-panel{padding:16px}.content-grid{display:flex;flex-direction:column}.map-panel{order:-1;width:100%}.map-panel #map{height:320px;min-height:260px}.lead-list{max-height:none}.stat-card{background:#0b2b2b}}
 
 .legacy-compat{display:none!important}
+
+/* High-contrast search pin: intentionally independent of Leaflet image assets. */
+.tribus-search-pin-icon{background:transparent!important;border:0!important}.tribus-search-pin{position:relative;display:block;width:30px;height:30px;margin:2px auto 0;background:#d4ad55;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 9px #0009;outline:2px solid #153b35}.tribus-search-pin i{position:absolute;display:block;width:8px;height:8px;left:8px;top:8px;border-radius:50%;background:#103b34;border:1px solid #fff}.pin-picker-modal #pinPickerMap{touch-action:pan-x pan-y;overscroll-behavior:contain}.pin-picker-modal .leaflet-marker-icon{cursor:grab;}

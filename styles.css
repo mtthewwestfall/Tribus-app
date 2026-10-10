@@ -71,3 +71,87 @@ footer{color:#849a90}footer>div:first-child{color:#d4af37}
 .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#0b2b2b;color:#f5f2e9}
 .leaflet-popup-content a{color:#e3c76e}
 @media(max-width:720px){.sidebar{background:#061d1d;border-color:#244545}.topbar{background:#092626}.page-heading>.btn{max-width:140px;white-space:normal}.map-panel{order:0}.map-panel #map{height:310px}}
+
+
+/* Tribus forest-and-gold visual refresh — layout only; map and search behavior stay intact. */
+:root{--ink:#f1f4ed;--muted:#a9bbb4;--line:#244746;--paper:#0b2b2b;--canvas:#072222;--accent:#d4af37;--accent-soft:#173b37;--green:#76c5a1;--green-soft:#153b31;--amber:#e4c46a;--amber-soft:#3b3420;--shadow:0 10px 30px #0002}
+html{background:#072222}
+body{background:#072222;color:#f1f4ed}
+.sidebar,.topbar{background:#0b2b2b;border-color:#244746}
+.sidebar{box-shadow:8px 0 30px #0000000a}
+.brand-mark{background:#d4af37;color:#072222;border-radius:11px;position:relative}
+.brand-mark span{display:block;width:13px;height:13px;border:2px solid #072222;transform:rotate(45deg)}
+.brand b,.crumb b,.sidebar-bottom b{color:#f3e5ab}
+.brand small,.workspace-label,.eyebrow{color:#a6bcb1}
+.nav-item{color:#b7c9c1}
+.nav-item.active{background:#173b37;color:#f3e5ab}
+.nav-count,.icon-button{background:#103432;color:#f3e5ab;border-color:#31534c}
+.avatar{background:#d4af37;color:#072222}
+.main{background:#072222}
+.crumb,.top-actions{color:#a9bbb4}
+.live-dot{background:#d4af37}
+.btn-dark{background:#d4af37;color:#072222;border-color:#d4af37}
+.btn-dark:hover{background:#f3e5ab;color:#072222}
+.btn-light{background:#103432;border-color:#31534c;color:#f3e5ab}
+.btn-light:hover{background:#17413d}
+.main>section{max-width:1900px;padding-top:30px}
+.page-heading h1{color:#f3e5ab;font-size:30px;letter-spacing:-1px}
+.page-heading p,.section-head p,.map-head p{color:#a9bbb4}
+.discover-panel,.stat-card,.leads-panel,.map-panel,.client-strip,.client-card,.pipeline-item,.modal,.drawer{background:#0b2b2b;border-color:#244746;box-shadow:var(--shadow)}
+.discover-panel{padding:22px;border-radius:15px}
+.discover-heading b{color:#f3e5ab;font-size:16px}
+.discover-heading p{color:#a9bbb4}
+.discover-fields label,.filter-panel label,.form-grid label{color:#b7c9c1}
+.discover-fields input,.discover-fields select,.filter-panel select,.form-grid input,.form-grid select,.form-grid textarea,.section-head select,.status-select{background:#072222;border-color:#31534c;color:#f1f4ed}
+.discover-fields input::placeholder,.form-grid input::placeholder,.form-grid textarea::placeholder{color:#77948a}
+.discover-message{background:#103432;color:#c2d2ca}
+.advanced-search summary{color:#f3e5ab}
+.filter-panel{background:#0b2b2b;border-color:#244746}
+.range-line input{accent-color:#d4af37}
+.text-button,.lead-action{color:#e2c65f}
+.stat-card{padding:18px;border-radius:12px}
+.stat-label{color:#a9bbb4}
+.stat-label span{color:#d4af37}
+.stat-value{color:#f3e5ab}
+.stat-foot{color:#a9bbb4}
+.content-grid{grid-template-columns:minmax(330px,.92fr) minmax(420px,1.08fr);gap:18px}
+.leads-panel,.map-panel{border-radius:14px}
+.section-head,.map-head{border-color:#244746}
+.section-head h2,.map-head h2,.modal-head h2,.drawer-head h2{color:#f3e5ab}
+.count-pill,.source-tag{background:#173b37;color:#f3e5ab}
+.lead-card{border-color:#1b3d3a}
+.lead-card:hover{background:#103432}
+.lead-logo{background:#173b37;color:#f3e5ab}
+.lead-name{color:#f1f4ed}
+.lead-meta,.lead-blurb{color:#a9bbb4}
+.badge{background:#173b37;color:#c2d2ca}
+.badge.website,.score-chip{background:#153b31;color:#9fe0bd}
+.badge.review,.score-chip.mid{background:#3b3420;color:#e4c46a}
+.score-chip.low{background:#173b37;color:#b7c9c1}
+.map-legend{background:#d4af37}
+#map,#pinPickerMap{background:#102f2f}
+.map-foot,.data-note{border-color:#244746;color:#a9bbb4}
+.map-foot span{color:#d4af37}
+.empty-state,.empty-state p{color:#a9bbb4}
+.empty-state b{color:#f3e5ab}
+.pipeline-column{background:#0b2b2b;border:1px solid #244746}
+.pipeline-column h3,.pipeline-item b,.client-card h3{color:#f3e5ab}
+.client-card p,.pipeline-item p{color:#a9bbb4}
+.modal-backdrop,.drawer-backdrop{background:#001414c9}
+.modal-head,.drawer-head{border-color:#244746}
+.form-note{color:#a9bbb4}
+.drawer-section{border-color:#244746}
+.drawer-section h3{color:#f3e5ab}
+.drawer-section p,.evidence-item{color:#c2d2ca;border-color:#244746}
+.detail-score{background:#103432;color:#f3e5ab}
+.detail-score small{color:#a9bbb4}
+.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#0b2b2b;color:#f1f4ed}
+.leaflet-popup-content a{color:#e2c65f}
+.pin-label{background:#d4af37;border-color:#072222}
+.pin-label.selected{background:#83d6ad}
+footer{color:#79958a}
+#pinPickerMap{border:1px solid #31534c}
+.pin-picker-footer{color:#a9bbb4}
+@media(min-width:1101px){.content-grid{align-items:start}.map-panel{position:sticky;top:18px}.map-panel #map{height:min(66vh,700px);min-height:460px}.lead-list{max-height:66vh}}
+@media(max-width:1100px){.content-grid{grid-template-columns:1fr}.map-panel{position:static}.map-panel #map{height:400px}}
+@media(max-width:720px){.sidebar{background:#0b2b2b}.brand-mark{width:32px;height:32px}.main>section{padding:20px 13px}.page-heading h1{font-size:25px}.discover-panel{padding:16px}.content-grid{display:flex;flex-direction:column}.map-panel{order:-1;width:100%}.map-panel #map{height:320px;min-height:260px}.lead-list{max-height:none}.stat-card{background:#0b2b2b}}

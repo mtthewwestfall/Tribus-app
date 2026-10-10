@@ -201,19 +201,52 @@ const server = http.createServer(async (req, res) => {
         const website = tags.website || tags["contact:website"] || "";
         const phone = tags.phone || tags["contact:phone"] || "";
         const id = "osm-" + p.type + "-" + p.id;
-        const score = Math.min(95, 24 + matchCount * 12 + (website ? 10 : 0) + (phone ? 7 : 0) + (address ? 8 : 0) + (tags.email || tags["contact:email"] ? 7 : 0) + (tags.opening_hours ? 5 : 0) + (tags.description ? 5 : 0) + (tags["contact:facebook"] || tags["contact:instagram"] || tags["contact:linkedin"] ? 4 : 0) + (tags.category || tags.brand ? 3 : 0));
+        // Opportunity score: reward established, locally operated businesses and
+        // visible business signals, while treating unverified data as unknown.
+        const foundedRaw = tags.start_date || tags["opening_date"] || tags["start_date:business"] || tags.founded || tags["company:founding_date"] || "";
+        const foundedMatch = String(foundedRaw).match(/(?:18|19|20)\\d{2}/);
+        const foundedYear = foundedMatch ? Number(foundedMatch[0]) : null;
+        const yearsOpen = foundedYear && foundedYear <= new Date().getFullYear() ? new Date().getFullYear() - foundedYear : null;
+        const brand = String(tags.brand || tags.operator || "").trim();
+        const franchiseWords = /\\b(mcdonald|starbucks|subway|domino|dunkin|wendy|burger king|taco bell|pizza hut|kfc|7.?eleven|anytime fitness|planet fitness|great clips|sprint|verizon|t.?mobile|walgreens|cvs|walmart|target)\\b/i;
+        const franchise = Boolean(brand && normalize(brand) !== normalize(tags.name)) || franchiseWords.test(String(tags.name) + " " + brand);
+        const localStatus = franchise ? "Likely franchise / chain" : brand ? "Brand/operator listed; local status uncertain" : "Likely independent (not confirmed)";
+        const hours = String(tags.opening_hours || "").trim();
+        const websiteHost = (() => { try { return new URL(website).hostname.replace(/^www\\./i, ""); } catch { return ""; } })();
+        const directoryWebsite = /facebook\\.com|instagram\\.com|yelp\\.com|linktr\\.ee|google\\.com|tripadvisor\\.com/i.test(websiteHost);
+        const websiteQuality = !website ? "No website listed" : directoryWebsite ? "Directory/social link only — weak website presence" : /^https:\\/\\//i.test(website) ? "HTTPS custom-site candidate — quality not yet audited" : "Website listed — security/quality not yet audited";
+        const yelpRating = Number(tags["yelp:rating"] || tags.yelp_rating || 0) || null;
+        const yelpReviews = Number(tags["yelp:review_count"] || tags.yelp_reviews || 0) || null;
+        const scoreFactors = [];
+        let score = 45;
+        if (hours) { score += 6; scoreFactors.push({factor:"Published opening hours",value:hours,impact:6,status:"known"}); }
+        else scoreFactors.push({factor:"Opening hours",value:"Not listed",impact:0,status:"unknown"});
+        if (!website) { score += 12; scoreFactors.push({factor:"Website opportunity",value:"No website listed",impact:12,status:"known"}); }
+        else if (directoryWebsite) { score += 8; scoreFactors.push({factor:"Website presence",value:websiteQuality,impact:8,status:"estimated"}); }
+        else { score += 2; scoreFactors.push({factor:"Website presence",value:websiteQuality,impact:2,status:"estimated"}); }
+        if (yearsOpen !== null) { const ageImpact = Math.min(10, Math.max(0, Math.floor(yearsOpen / 2))); score += ageImpact; scoreFactors.push({factor:"Years operating",value:yearsOpen + " years (from " + foundedYear + " tag)",impact:ageImpact,status:"mapped data"}); }
+        else scoreFactors.push({factor:"Years operating",value:"Not available",impact:0,status:"unknown"});
+        if (franchise) { score -= 12; scoreFactors.push({factor:"Local vs franchise",value:localStatus,impact:-12,status:"estimated"}); }
+        else { score += 8; scoreFactors.push({factor:"Local vs franchise",value:localStatus,impact:8,status:"estimated"}); }
+        if (yelpRating !== null || yelpReviews !== null) { const reviewImpact = Math.min(10, Math.round((yelpRating || 0) * 1.5) + Math.min(4, Math.floor((yelpReviews || 0) / 50))); score += reviewImpact; scoreFactors.push({factor:"Yelp reviews",value:(yelpRating ? yelpRating + "/5" : "Rating unknown") + (yelpReviews ? " · " + yelpReviews + " reviews" : ""),impact:reviewImpact,status:"mapped tag — verify"}); }
+        else scoreFactors.push({factor:"Yelp reviews",value:"Not supplied by OpenStreetMap; needs external research",impact:0,status:"unknown"});
+        if (matchCount) { const relevanceImpact = Math.min(8, matchCount * 3); score += relevanceImpact; scoreFactors.push({factor:"Business-type relevance",value:matchCount + " search term match(es)",impact:relevanceImpact,status:"estimated"}); }
+        if (phone) score += 3;
+        if (address) score += 3;
+        score = Math.max(0, Math.min(100, score));
         found.set(id, {
           id, sourceId: id, name: tags.name, category, city,
           region: tags["addr:state"] || "", address, website, phone,
           email: tags.email || tags["contact:email"] || "",
-          lat: point.lat, lon: point.lon, rating: null, reviewCount: 0,
+          lat: point.lat, lon: point.lon, rating: yelpRating, reviewCount: yelpReviews || 0,
+          yearsOpen, foundedYear, localStatus, websiteQuality, openingHours: hours, scoreFactors,
           mapsUrl: "https://www.openstreetmap.org/" + p.type + "/" + p.id,
           score, status: "New",
           websiteStatus: website ? "Listed in OpenStreetMap; not independently verified" : "Website not listed",
           confidence: website ? "medium" : "low", provider: "OpenStreetMap",
           notes: "Mapped business listing. Confirm current operating status and contact details before outreach.",
-          reason: "Discovered from OpenStreetMap tags; fit score is a rough category/contact-data heuristic, not purchase intent.",
-          evidence: ["Source: OpenStreetMap", address || "No street address supplied in map data", website ? "Website listed in map data; not independently verified" : "No website listed in map data", phone ? "Phone number listed in map data" : "No phone number listed in map data"],
+          reason: "Opportunity score combines published hours, website gap/presence, available operating-history data, estimated local-vs-chain status, Yelp data only if explicitly present, and business-type relevance. Unknown factors are not treated as verified facts; this is not purchase intent.",
+          evidence: ["Source: OpenStreetMap", address || "No street address supplied in map data", website ? "Website listed in map data; not independently verified" : "No website listed in map data", phone ? "Phone number listed in map data" : "No phone number listed in map data", hours ? "Opening hours: " + hours : "Opening hours not supplied", yearsOpen !== null ? "Operating history inferred from mapped year " + foundedYear : "Years operating not supplied", localStatus, yelpRating || yelpReviews ? "Yelp fields present in mapped tags; verify externally" : "Yelp rating/review count unavailable from OpenStreetMap; not assumed"],
           demo: false
         });
       }

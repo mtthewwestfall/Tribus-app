@@ -125,7 +125,7 @@ const server = http.createServer(async (req, res) => {
         }
         geo = cachedGeo;
       }
-      const overpassQuery = '[out:json][timeout:18];(nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["shop"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["office"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["craft"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["amenity"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["healthcare"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["tourism"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["leisure"];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"]["industrial"];);out body center 200;';
+      const overpassQuery = '[out:json][timeout:8];nwr(around:' + radius + ',' + geo.lat + ',' + geo.lon + ')["name"][~"^(shop|office|craft|amenity|healthcare|tourism|leisure|industrial)$"~".+"];out body center 100;';
       // Public Overpass instances can rate-limit or become temporarily overloaded.
       // Try multiple community endpoints so one unhealthy mirror does not break discovery.
       const overpassEndpoints = [
@@ -135,23 +135,20 @@ const server = http.createServer(async (req, res) => {
       ];
       let payload = null;
       const overpassErrors = [];
-      for (const endpoint of overpassEndpoints) {
-        try {
-          const overpassResponse = await fetch(endpoint, {
+      // Race the public mirrors so one slow or overloaded endpoint does not block discovery.
+      try {
+        payload = await Promise.any(overpassEndpoints.map(async (endpoint) => {
+          const response = await fetch(endpoint, {
             method: "POST",
             headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8", "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" },
             body: "data=" + encodeURIComponent(overpassQuery),
-            signal: AbortSignal.timeout(18000)
+            signal: AbortSignal.timeout(8500)
           });
-          if (!overpassResponse.ok) {
-            overpassErrors.push(new URL(endpoint).hostname + ": HTTP " + overpassResponse.status);
-            continue;
-          }
-          payload = await overpassResponse.json();
-          break;
-        } catch (endpointError) {
-          overpassErrors.push(new URL(endpoint).hostname + ": " + (endpointError.name === "TimeoutError" ? "timed out" : endpointError.message));
-        }
+          if (!response.ok) throw new Error(new URL(endpoint).hostname + ": HTTP " + response.status);
+          return await response.json();
+        }));
+      } catch (aggregateError) {
+        for (const error of aggregateError.errors || [aggregateError]) overpassErrors.push(error.message || String(error));
       }
       if (!payload) throw new Error("All OpenStreetMap business search endpoints failed. " + overpassErrors.join("; "));
 

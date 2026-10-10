@@ -86,7 +86,7 @@ const server = http.createServer(async (req, res) => {
     try {
       let result = cache.get(key);
       if (!result) {
-        const endpoint = reverse ? "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + lat + "&lon=" + lon : "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(query);
+        const usZip = !reverse && /^\d{5}(?:-\d{4})?$/.test(query); const endpoint = reverse ? "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + lat + "&lon=" + lon : usZip ? "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&postalcode=" + encodeURIComponent(query) : "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(query);
         const response = await fetch(endpoint, { headers: { "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" }, signal: AbortSignal.timeout(12000) });
         if (!response.ok) throw new Error("OpenStreetMap geocoding failed (" + response.status + ")");
         const data = await response.json(); const item = reverse ? data : data[0];
@@ -114,12 +114,14 @@ const server = http.createServer(async (req, res) => {
       if (input?.lat !== undefined && input?.lon !== undefined && Number.isFinite(inputLat) && Number.isFinite(inputLon) && Math.abs(inputLat) <= 90 && Math.abs(inputLon) <= 180) {
         geo = { lat: inputLat, lon: inputLon, displayName: location || ("Pinned location " + inputLat.toFixed(5) + ", " + inputLon.toFixed(5)) };
       } else {
-        const geoKey = "geo:" + location.toLowerCase(); let cachedGeo = cache.get(geoKey);
+        const usZip = /^\d{5}(?:-\d{4})?$/.test(location); const geoKey = usZip ? "geo:us-zip:" + location : "geo:" + location.toLowerCase(); let cachedGeo = cache.get(geoKey);
         if (!cachedGeo) {
           const postcodeOnly = /^[a-z0-9][a-z0-9 -]{2,10}$/i.test(location) && /\d/.test(location);
-          const geoUrls = postcodeOnly
-            ? ["https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&postalcode=" + encodeURIComponent(location), "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location)]
-            : ["https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location)];
+          const geoUrls = usZip
+            ? ["https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&postalcode=" + encodeURIComponent(location), "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&q=" + encodeURIComponent(location + ", USA")]
+            : postcodeOnly
+              ? ["https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&postalcode=" + encodeURIComponent(location), "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location)]
+              : ["https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(location)];
           let geoResults = [];
           for (const geoUrl of geoUrls) {
             const geoResponse = await fetch(geoUrl, { headers: { "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" }, signal: AbortSignal.timeout(12000) });

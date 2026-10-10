@@ -153,7 +153,13 @@ const server = http.createServer(async (req, res) => {
             signal: AbortSignal.timeout(8500)
           });
           if (!response.ok) throw new Error(new URL(endpoint).hostname + ": HTTP " + response.status);
-          return await response.json();
+          const data = await response.json();
+          // Some overloaded Overpass mirrors return HTTP 200 with an error remark
+          // instead of an elements array. Treat those as failed mirrors and race the next.
+          if (!data || !Array.isArray(data.elements) || data.remark) {
+            throw new Error(new URL(endpoint).hostname + ": invalid Overpass response" + (data?.remark ? " (" + String(data.remark).slice(0, 160) + ")" : ""));
+          }
+          return data;
         }));
       } catch (aggregateError) {
         for (const error of aggregateError.errors || [aggregateError]) overpassErrors.push(error.message || String(error));

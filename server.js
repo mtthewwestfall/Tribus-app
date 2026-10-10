@@ -144,27 +144,35 @@ const server = http.createServer(async (req, res) => {
         "https://ethiopia.overpass.openplaceguide.org/api/interpreter"
       ];
       let payload = null;
+      let emptyPayload = null;
       const overpassErrors = [];
-      // Race the public mirrors so one slow or overloaded endpoint does not block discovery.
+      // Race public mirrors, but do not let a fast, valid-but-empty mirror win
+      // while another mirror has actual listings for the same area.
       try {
         payload = await Promise.any(overpassEndpoints.map(async (endpoint) => {
+          const host = new URL(endpoint).hostname;
           const response = await fetch(endpoint, {
             method: "POST",
             headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8", "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" },
             body: "data=" + encodeURIComponent(overpassQuery),
-            signal: AbortSignal.timeout(8500)
+            signal: AbortSignal.timeout(12000)
           });
-          if (!response.ok) throw new Error(new URL(endpoint).hostname + ": HTTP " + response.status);
+          if (!response.ok) throw new Error(host + ": HTTP " + response.status);
           const data = await response.json();
-          // Some overloaded Overpass mirrors return HTTP 200 with an error remark
-          // instead of an elements array. Treat those as failed mirrors and race the next.
           if (!data || !Array.isArray(data.elements) || data.remark) {
-            throw new Error(new URL(endpoint).hostname + ": invalid Overpass response" + (data?.remark ? " (" + String(data.remark).slice(0, 160) + ")" : ""));
+            throw new Error(host + ": invalid Overpass response" + (data?.remark ? " (" + String(data.remark).slice(0, 160) + ")" : ""));
+          }
+          if (data.elements.length === 0) {
+            emptyPayload = data;
+            throw new Error(host + ": returned zero listings; trying another mirror");
           }
           return data;
         }));
       } catch (aggregateError) {
         for (const error of aggregateError.errors || [aggregateError]) overpassErrors.push(error.message || String(error));
+        // If every healthy mirror genuinely returned no listings, return an empty
+        // result set instead of masking it as an outage.
+        if (emptyPayload) payload = emptyPayload;
       }
       if (!payload) throw new Error("All OpenStreetMap business search endpoints failed. " + overpassErrors.join("; "));
 

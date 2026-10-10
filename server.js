@@ -201,7 +201,7 @@ const server = http.createServer(async (req, res) => {
         const website = tags.website || tags["contact:website"] || "";
         const phone = tags.phone || tags["contact:phone"] || "";
         const id = "osm-" + p.type + "-" + p.id;
-        const score = Math.min(88, 42 + matchCount * 12 + (website ? 8 : 0) + (phone ? 5 : 0));
+        const score = Math.min(95, 24 + matchCount * 12 + (website ? 10 : 0) + (phone ? 7 : 0) + (address ? 8 : 0) + (tags.email || tags["contact:email"] ? 7 : 0) + (tags.opening_hours ? 5 : 0) + (tags.description ? 5 : 0) + (tags["contact:facebook"] || tags["contact:instagram"] || tags["contact:linkedin"] ? 4 : 0) + (tags.category || tags.brand ? 3 : 0));
         found.set(id, {
           id, sourceId: id, name: tags.name, category, city,
           region: tags["addr:state"] || "", address, website, phone,

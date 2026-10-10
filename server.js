@@ -204,17 +204,17 @@ const server = http.createServer(async (req, res) => {
         // Opportunity score: reward established, locally operated businesses and
         // visible business signals, while treating unverified data as unknown.
         const foundedRaw = tags.start_date || tags["opening_date"] || tags["start_date:business"] || tags.founded || tags["company:founding_date"] || "";
-        const foundedMatch = String(foundedRaw).match(/(?:18|19|20)\\d{2}/);
+        const foundedMatch = String(foundedRaw).match(/(?:18|19|20)\d{2}/);
         const foundedYear = foundedMatch ? Number(foundedMatch[0]) : null;
         const yearsOpen = foundedYear && foundedYear <= new Date().getFullYear() ? new Date().getFullYear() - foundedYear : null;
         const brand = String(tags.brand || tags.operator || "").trim();
-        const franchiseWords = /\\b(mcdonald|starbucks|subway|domino|dunkin|wendy|burger king|taco bell|pizza hut|kfc|7.?eleven|anytime fitness|planet fitness|great clips|sprint|verizon|t.?mobile|walgreens|cvs|walmart|target)\\b/i;
+        const franchiseWords = /\b(mcdonald|starbucks|subway|domino|dunkin|wendy|burger king|taco bell|pizza hut|kfc|7.?eleven|anytime fitness|planet fitness|great clips|sprint|verizon|t.?mobile|walgreens|cvs|walmart|target)\b/i;
         const franchise = Boolean(brand && normalize(brand) !== normalize(tags.name)) || franchiseWords.test(String(tags.name) + " " + brand);
         const localStatus = franchise ? "Likely franchise / chain" : brand ? "Brand/operator listed; local status uncertain" : "Likely independent (not confirmed)";
         const hours = String(tags.opening_hours || "").trim();
-        const websiteHost = (() => { try { return new URL(website).hostname.replace(/^www\\./i, ""); } catch { return ""; } })();
-        const directoryWebsite = /facebook\\.com|instagram\\.com|yelp\\.com|linktr\\.ee|google\\.com|tripadvisor\\.com/i.test(websiteHost);
-        const websiteQuality = !website ? "No website listed" : directoryWebsite ? "Directory/social link only — weak website presence" : /^https:\\/\\//i.test(website) ? "HTTPS custom-site candidate — quality not yet audited" : "Website listed — security/quality not yet audited";
+        const websiteHost = (() => { try { return new URL(website).hostname.replace(/^www\./i, ""); } catch { return ""; } })();
+        const directoryWebsite = /facebook\.com|instagram\.com|yelp\.com|linktr\.ee|google\.com|tripadvisor\.com/i.test(websiteHost);
+        const websiteQuality = !website ? "No website listed" : directoryWebsite ? "Directory/social link only — weak website presence" : /^https:\/\//i.test(website) ? "HTTPS custom-site candidate — quality not yet audited" : "Website listed — security/quality not yet audited";
         const yelpRating = Number(tags["yelp:rating"] || tags.yelp_rating || 0) || null;
         const yelpReviews = Number(tags["yelp:review_count"] || tags.yelp_reviews || 0) || null;
         const scoreFactors = [];

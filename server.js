@@ -41,9 +41,38 @@ async function inspectPublicWebsite(input) {
     const title = strip((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || "");
     const descriptionMatch = html.match(/<meta[^>]+(?:name|property)=["'](?:description|og:description|twitter:description)["'][^>]+content=["']([^"']*)["']/i) || html.match(/<meta[^>]+content=["']([^"']*)["'][^>]+(?:name|property)=["'](?:description|og:description|twitter:description)["']/i);
     const description = strip(descriptionMatch?.[1] || "");
+    const viewport = /<meta[^>]+name=["']viewport["']/i.test(html);
+    const generator = strip(((html.match(/<meta[^>]+name=["']generator["'][^>]+content=["']([^"']*)["']/i) || [])[1]) || "");
+    const dateHints = [
+      html.match(/<meta[^>]+(?:property|name)=["'](?:article:modified_time|og:updated_time|last-modified|dateModified|dcterms.modified)["'][^>]+content=["']([^"']+)["']/i)?.[1],
+      html.match(/<time[^>]+datetime=["']([^"']+)["']/i)?.[1]
+    ].filter(Boolean);
+    const copyrightYears = [...html.matchAll(/(?:©|&copy;|copyright\s*)\s*(20\d{2})/gi)].map(m => Number(m[1]));
+    const explicitDate = dateHints.map(v => { const m = String(v).match(/(?:19|20)\d{2}(?:-\d{2})?(?:-\d{2})?/); return m ? m[0] : null; }).find(Boolean) || null;
+    const dateYear = explicitDate ? Number(explicitDate.slice(0,4)) : null;
+    let freshnessImpact = 0;
+    const freshnessNotes = [];
+    if (dateYear) {
+      const age = new Date().getFullYear() - dateYear;
+      freshnessImpact = age >= 5 ? 12 : age >= 3 ? 8 : age >= 2 ? 4 : 0;
+      freshnessNotes.push("Page date metadata suggests " + age + " year(s) since update (" + explicitDate + "); metadata can be misleading.");
+    } else if (copyrightYears.length) {
+      const year = Math.max(...copyrightYears);
+      const age = new Date().getFullYear() - year;
+      freshnessImpact = age >= 5 ? 5 : age >= 3 ? 3 : 0;
+      freshnessNotes.push("Copyright year is " + year + "; this is only a weak freshness signal, not a confirmed update date.");
+    } else {
+      freshnessNotes.push("No reliable page-update date found; marketing age is unknown.");
+    }
+    const qualitySignals = [];
+    if (!title) { freshnessImpact += 3; qualitySignals.push("Missing page title"); }
+    if (!description) { freshnessImpact += 3; qualitySignals.push("Missing meta description"); }
+    if (!viewport) { freshnessImpact += 2; qualitySignals.push("No mobile viewport tag detected"); }
+    if (current.protocol !== "https:") { freshnessImpact += 2; qualitySignals.push("Website does not start on HTTPS"); }
+    const marketingAudit = { freshnessImpact: Math.min(15, freshnessImpact), dateYear, explicitDate, titlePresent: !!title, descriptionPresent: !!description, viewportPresent: viewport, https: current.protocol === "https:", generator, notes: [...freshnessNotes, ...qualitySignals] };
     const emails = [...new Set((html.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []).filter(x => !/example\.|wixpress|sentry/i.test(x)))].slice(0, 3);
     const phones = [...new Set((html.match(/(?:\+?\d[\d ().-]{7,}\d)/g) || []).map(x => x.trim()).filter(x => x.replace(/\D/g, "").length >= 9 && x.replace(/\D/g, "").length <= 15))].slice(0, 3);
-    return { url: current.href, title: title.slice(0, 180), description: description.slice(0, 500), emails, phones, excerpt: strip(html).slice(0, 420) };
+    return { url: current.href, title: title.slice(0, 180), description: description.slice(0, 500), emails, phones, excerpt: strip(html).slice(0, 420), marketingAudit };
   }
   return null;
 }
@@ -278,7 +307,7 @@ const server = http.createServer(async (req, res) => {
       const page = business.website ? await inspectPublicWebsite(String(business.website)) : null;
       const sources = page ? [{ title: page.title || page.url, url: page.url, excerpt: [page.description, page.excerpt].filter(Boolean).join(" ").slice(0, 420) }] : [];
       const evidence = ["Research mode: direct public website inspection (no paid search API).", ...(page?.title ? ["Website title: " + page.title] : []), ...(page?.description ? ["Website meta description: " + page.description] : []), ...(page?.emails?.length ? ["Email address(es) visible in website HTML: " + page.emails.join(", ") + " (not independently verified)"] : []), ...(page?.phones?.length ? ["Phone-like number(s) visible in website HTML: " + page.phones.join(", ") + " (not independently verified)"] : [])];
-      const result = { businessId: String(business.id), status: page ? "Website Inspected — review required" : "Needs review", confidence: "low", provider: "direct-website", verifiedUrl: page?.url || "", researchStatus: page ? "Website inspected — review required" : "Limited research — review required", researchSummary: page ? "Read public page metadata and visible text from the listed website. This does not confirm ownership, current operation, service area, or buyer intent." : business.website ? "The listed website could not be safely fetched or did not return a readable public HTML page. Verify manually." : "No website is present in the map listing. Without a search API, external business discovery is limited to the mapped listing and its tags.", evidence, candidates: [], sources, websiteDetails: page ? { title: page.title, description: page.description, emails: page.emails, phones: page.phones } : null, cached: false };
+      const result = { businessId: String(business.id), status: page ? "Website Inspected — review required" : "Needs review", confidence: "low", provider: "direct-website", verifiedUrl: page?.url || "", researchStatus: page ? "Website inspected — review required" : "Limited research — review required", researchSummary: page ? "Read public page metadata and visible text from the listed website. This does not confirm ownership, current operation, service area, or buyer intent." : business.website ? "The listed website could not be safely fetched or did not return a readable public HTML page. Verify manually." : "No website is present in the map listing. Without a search API, external business discovery is limited to the mapped listing and its tags.", evidence, candidates: [], sources, websiteDetails: page ? { title: page.title, description: page.description, emails: page.emails, phones: page.phones, marketingAudit: page.marketingAudit } : null, marketingAudit: page?.marketingAudit || null, cached: false };
       cache.set(String(business.id), result);
       return json(res, 200, result);
     }

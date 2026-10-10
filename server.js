@@ -80,16 +80,17 @@ async function inspectPublicWebsite(input) {
 async function searchPublicWeb(business) {
   const base = [business.name, business.city, business.region].filter(Boolean).join(" ").trim();
   if (!base) return [];
-  const results = [];
-  for (const query of [base + " official website", base + " contact"]) {
+  const queries = [base + " official website", base + " contact"];
+  const searchPromises = queries.map(async (query) => {
     try {
       const response = await fetch("https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query), {
         headers: { "user-agent": "Mozilla/5.0 (compatible; TribusOpportunityRadar/1.0)", "accept": "text/html" },
         signal: AbortSignal.timeout(7000)
       });
-      if (!response.ok) continue;
+      if (!response.ok) return [];
       const html = (await response.text()).slice(0, 400000);
       const links = [...html.matchAll(/<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)];
+      const items = [];
       for (const m of links) {
         const clean = v => String(v || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
         let target;
@@ -100,9 +101,19 @@ async function searchPublicWeb(business) {
           if (!["http:","https:"].includes(target.protocol) || !target.hostname.includes(".") || target.hostname === "duckduckgo.com" || target.hostname.endsWith(".duckduckgo.com")) continue;
         } catch { continue; }
         const title = clean(m[2]);
-        if (title && !results.some(x => x.url === target.href)) results.push({title,url:target.href,content:"Public search result; official ownership needs confirmation."});
+        if (title) items.push({ title, url: target.href, content: "Public search result; official ownership needs confirmation." });
       }
-    } catch {}
+      return items;
+    } catch { return []; }
+  });
+  const searchResults = await Promise.allSettled(searchPromises);
+  const results = [];
+  for (const res of searchResults) {
+    if (res.status === "fulfilled" && Array.isArray(res.value)) {
+      for (const item of res.value) {
+        if (!results.some(x => x.url === item.url)) results.push(item);
+      }
+    }
   }
   return results.slice(0, 12);
 }
@@ -205,16 +216,19 @@ const server = http.createServer(async (req, res) => {
       let payload = null;
       let emptyPayload = null;
       const overpassErrors = [];
+      const overpassController = new AbortController();
       // Race public mirrors, but do not let a fast, valid-but-empty mirror win
       // while another mirror has actual listings for the same area.
       try {
         payload = await Promise.any(overpassEndpoints.map(async (endpoint) => {
           const host = new URL(endpoint).hostname;
+          const timeoutSignal = AbortSignal.timeout(12000);
+          const combinedSignal = AbortSignal.any([overpassController.signal, timeoutSignal]);
           const response = await fetch(endpoint, {
             method: "POST",
             headers: { "content-type": "application/x-www-form-urlencoded;charset=UTF-8", "User-Agent": "TribusOpportunityRadar/1.0", "Accept": "application/json" },
             body: "data=" + encodeURIComponent(overpassQuery),
-            signal: AbortSignal.timeout(12000)
+            signal: combinedSignal
           });
           if (!response.ok) throw new Error(host + ": HTTP " + response.status);
           const data = await response.json();
@@ -225,6 +239,7 @@ const server = http.createServer(async (req, res) => {
             emptyPayload = data;
             throw new Error(host + ": returned zero listings; trying another mirror");
           }
+          overpassController.abort();
           return data;
         }));
       } catch (aggregateError) {

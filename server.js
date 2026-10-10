@@ -164,6 +164,9 @@ const server = http.createServer(async (req, res) => {
         const tagCategory = tags.shop || tags.office || tags.craft || tags.amenity || tags.healthcare || tags.tourism || tags.leisure || tags.industrial || "business";
         const searchable = normalize([tags.name, tagCategory, tags.brand, tags.description].join(" "));
         const matchCount = terms.filter(term => searchable.includes(term)).length;
+        // The Overpass query fetches a broad local-business set; enforce the requested
+        // business type here so unrelated nearby listings are not shown as matches.
+        if (terms.length && matchCount === 0) continue;
         const category = normalize(tagCategory).replace(/;/g, ", ") || query;
         const addressParts = [
           [tags["addr:housenumber"], tags["addr:street"]].filter(Boolean).join(" "),

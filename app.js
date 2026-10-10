@@ -20,11 +20,17 @@ function currentClient(){return clients.find(c=>c.id===$("clientSelect").value)|
 function filters(){return {q:$("searchInput").value.trim().toLowerCase(),cat:$("categoryFilter").value,status:$("statusFilter").value,min:+$("scoreFilter").value,radius:+$("radiusFilter").value}}
 function visibleLeads(){const f=filters();const center=circle?circle.getLatLng():null;const maxMeters=f.radius*1000;return leads.filter(l=>{if(f.q&&![l.name,l.category,l.city,l.region].join(" ").toLowerCase().includes(f.q))return false;if(f.cat!=="all"&&l.category!==f.cat)return false;if(f.status!=="all"&&l.status!==f.status)return false;if(l.score<f.min)return false;if(center&&typeof l.lat==="number"&&typeof l.lon==="number"&&map&&map.distance(center,L.latLng(l.lat,l.lon))>maxMeters)return false;return true})}
 function scoreClass(n){return n>=70?"":n>=50?"mid":"low"}
+function websiteBadge(l){
+  if(l.websiteStatus==="Website Found"||l.websiteStatus==="User supplied")return'<span class="badge website">✓ Website Verified</span>';
+  if((l.websiteStatus||"").includes("Inspected"))return'<span class="badge website">✓ Website Inspected</span>';
+  if((l.websiteStatus||"").includes("Candidate"))return'<span class="badge review">? Site Candidate</span>';
+  return'<span class="badge review">◷ Website unverified</span>';
+}
 function render(){
-  const list=visibleLeads();$("leadCount").textContent=list.length;$("statLeads").textContent=list.length;$("statFit").textContent=list.filter(l=>l.score>=70).length;$("statWeb").textContent=list.filter(l=>l.websiteStatus==="Website Found"&&l.website).length;$("statPipeline").textContent=leads.filter(l=>!["New","Not a fit"].includes(l.status)).length;$("pipelineCount").textContent=leads.filter(l=>!["New","Not a fit"].includes(l.status)).length;
+  const list=visibleLeads();$("leadCount").textContent=list.length;$("statLeads").textContent=list.length;$("statFit").textContent=list.filter(l=>l.score>=70).length;$("statWeb").textContent=list.filter(l=>(l.websiteStatus==="Website Found"||l.websiteStatus==="User supplied"||(l.websiteStatus||"").includes("Inspected"))&&l.website).length;$("statPipeline").textContent=leads.filter(l=>!["New","Not a fit"].includes(l.status)).length;$("pipelineCount").textContent=leads.filter(l=>!["New","Not a fit"].includes(l.status)).length;
   $("filterBadge").textContent=(filters().cat!=="all"?1:0)+(filters().status!=="all"?1:0)+(filters().min?1:0);
   const sorted=[...list].sort((a,b)=>$("sortSelect").value==="name"?a.name.localeCompare(b.name):$("sortSelect").value==="status"?a.status.localeCompare(b.status):b.score-a.score);
-  $("leadList").innerHTML=sorted.map(l=>`<article class="lead-card" data-open="${esc(l.id)}"><div class="lead-title-row"><div class="lead-logo">${esc(initials(l.name))}</div><div class="lead-main"><div class="lead-name">${esc(l.name)}</div><div class="lead-meta">${esc(l.category)} · ${esc([l.city,l.region].filter(Boolean).join(", "))}</div></div><span class="score-chip ${scoreClass(l.score)}">${l.score} fit</span></div><div class="lead-badges"><span class="badge">${esc(l.status)}</span><span class="badge ${l.websiteStatus==="Website Found"?"website":"review"}">${l.websiteStatus==="Website Found"?"✓ Website Found":"◷ Website unverified"}</span>${l.demo?'<span class="badge">Illustrative demo</span>':""}</div><div class="lead-blurb">${esc(l.reason||l.notes||"No research notes added yet.")}</div><div class="lead-bottom"><select class="status-select" data-status="${esc(l.id)}" aria-label="Pipeline status for ${esc(l.name)}">${statuses.map(s=>`<option ${s===l.status?"selected":""}>${s}</option>`).join("")}</select><button class="lead-action" data-verify="${esc(l.id)}">Verify website ↗</button><button class="lead-action" data-save="${esc(l.id)}">${l.saved?"★ Saved":"☆ Save lead"}</button></div></article>`).join("");
+  $("leadList").innerHTML=sorted.map(l=>`<article class="lead-card" data-open="${esc(l.id)}"><div class="lead-title-row"><div class="lead-logo">${esc(initials(l.name))}</div><div class="lead-main"><div class="lead-name">${esc(l.name)}</div><div class="lead-meta">${esc(l.category)} · ${esc([l.city,l.region].filter(Boolean).join(", "))}</div></div><span class="score-chip ${scoreClass(l.score)}">${l.score} fit</span></div><div class="lead-badges"><span class="badge">${esc(l.status)}</span>${websiteBadge(l)}${l.demo?'<span class="badge">Illustrative demo</span>':""}</div><div class="lead-blurb">${esc(l.reason||l.notes||"No research notes added yet.")}</div><div class="lead-bottom"><select class="status-select" data-status="${esc(l.id)}" aria-label="Pipeline status for ${esc(l.name)}">${statuses.map(s=>`<option ${s===l.status?"selected":""}>${s}</option>`).join("")}</select><button class="lead-action" data-verify="${esc(l.id)}">Verify website ↗</button><button class="lead-action" data-save="${esc(l.id)}">${l.saved?"★ Saved":"☆ Save lead"}</button></div></article>`).join("");
   $("emptyState").classList.toggle("hidden",list.length>0);
   updateMap(list);renderPipeline();renderClients();renderSavedLeads();
 }
@@ -41,7 +47,7 @@ function renderPipeline(){const active=leads.filter(l=>!["Not a fit"].includes(l
 function renderSavedLeads(){
   const saved=leads.filter(l=>l.saved===true);
   $("savedCount").textContent=saved.length;
-  $("savedContent").innerHTML=saved.map(l=>`<article class="lead-card saved-lead-card" data-open="${esc(l.id)}"><div class="lead-title-row"><div class="lead-logo">${esc(initials(l.name))}</div><div class="lead-main"><div class="lead-name">${esc(l.name)}</div><div class="lead-meta">${esc(l.category)} · ${esc([l.city,l.region].filter(Boolean).join(", "))}</div></div><span class="score-chip ${scoreClass(l.score)}">${l.score} fit</span></div><div class="lead-badges"><span class="badge">${esc(l.status)}</span><span class="badge">${l.websiteStatus==="Website Found"?"✓ Website Found":"◷ Website unverified"}</span></div><div class="lead-blurb">${esc(l.reason||l.notes||"No research notes added yet.")}</div><div class="lead-bottom"><button class="btn btn-light" data-open-detail="${esc(l.id)}">Open report</button><button class="btn btn-light" data-unsave="${esc(l.id)}">Remove from saved</button></div></article>`).join("");
+  $("savedContent").innerHTML=saved.map(l=>`<article class="lead-card saved-lead-card" data-open="${esc(l.id)}"><div class="lead-title-row"><div class="lead-logo">${esc(initials(l.name))}</div><div class="lead-main"><div class="lead-name">${esc(l.name)}</div><div class="lead-meta">${esc(l.category)} · ${esc([l.city,l.region].filter(Boolean).join(", "))}</div></div><span class="score-chip ${scoreClass(l.score)}">${l.score} fit</span></div><div class="lead-badges"><span class="badge">${esc(l.status)}</span>${websiteBadge(l)}</div><div class="lead-blurb">${esc(l.reason||l.notes||"No research notes added yet.")}</div><div class="lead-bottom"><button class="btn btn-light" data-open-detail="${esc(l.id)}">Open report</button><button class="btn btn-light" data-unsave="${esc(l.id)}">Remove from saved</button></div></article>`).join("");
   $("savedEmpty").classList.toggle("hidden",saved.length>0);
 }
 function renderClients(){$("clientsContent").innerHTML=clients.map(c=>`<article class="client-card"><div class="lead-logo">♧</div><h3>${esc(c.name)}</h3><p>${esc(c.offer||"No offer description yet.")}</p><div class="lead-meta">Ideal customer: ${esc(c.idealCustomer||"Not specified")}</div><div class="lead-meta">Chain exclusion: ${c.excludeChains?"On":"Off"}</div><button class="btn btn-light" data-client-edit="${esc(c.id)}">Edit profile</button> <button class="text-button" data-client-use="${esc(c.id)}">Use profile</button></article>`).join("")}
@@ -133,26 +139,31 @@ async function discoverBusinesses(){
     message.textContent="Found "+data.count+" OpenStreetMap listings for “"+(industry||"all business types")+"” in "+location+". Added "+added+" new leads"+(updated?", updated "+updated:"")+". Starting evidence research for up to 5 leads… "+(data.note||"");
     if(data.count===0)message.textContent=data.note||("No listings were returned near "+location+". Try a larger search radius or choose a nearby point on the map.");
     const researchBatch=(data.results||[]).slice(0,5);
-    let researched=0;
-    for(const item of researchBatch){
-      const lead=leads.find(l=>l.id===item.id);
-      if(!lead)continue;
-      try{
-        const rr=await fetch("/api/verify-website",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...lead,clientOffer:currentClient()?.offer||"",idealCustomer:currentClient()?.idealCustomer||""})});
-        const result=await rr.json();
-        if(rr.ok){
-          lead.websiteStatus=result.status;lead.provider=result.provider;lead.confidence=result.confidence;
-          lead.verifiedUrl=result.verifiedUrl||"";lead.candidates=result.candidates||[];lead.sources=result.sources||[];
-          lead.researchStatus=result.researchStatus||"Needs review";lead.researchSummary=result.researchSummary||"";
-          lead.evidence=[...(item.evidence||[]),...(result.evidence||[])];
-          if(result.verifiedUrl)lead.website=result.verifiedUrl;
-          if(result.sources?.length){lead.notes="Automated public-source research found "+result.sources.length+" source excerpt(s). Review each source; excerpts are not independent confirmation.";lead.reason="Potential category match based on mapped tags; public-source evidence was gathered for review. Fit and current operating status remain unconfirmed; no buyer intent is inferred.";}
-        }
-      }catch{}
-      researched++;persist();render();
-      message.textContent="Discovery complete: "+data.count+" listings. Research checked "+researched+"/"+researchBatch.length+" leads. "+(data.note||"");
+    if(researchBatch.length){
+      const clientOffer=currentClient()?.offer||"", idealCustomer=currentClient()?.idealCustomer||"";
+      const researchPromises=researchBatch.map(async(item)=>{
+        const lead=leads.find(l=>l.id===item.id);
+        if(!lead)return null;
+        try{
+          const rr=await fetch("/api/verify-website",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({...lead,clientOffer,idealCustomer})});
+          const result=await rr.json();
+          if(rr.ok){
+            lead.websiteStatus=result.status;lead.provider=result.provider;lead.confidence=result.confidence;
+            lead.verifiedUrl=result.verifiedUrl||"";lead.candidates=result.candidates||[];lead.sources=result.sources||[];
+            lead.researchStatus=result.researchStatus||"Needs review";lead.researchSummary=result.researchSummary||"";
+            lead.evidence=[...(item.evidence||[]),...(result.evidence||[])];
+            if(result.verifiedUrl)lead.website=result.verifiedUrl;
+            if(result.sources?.length){lead.notes="Automated public-source research found "+result.sources.length+" source excerpt(s). Review each source; excerpts are not independent confirmation.";lead.reason="Potential category match based on mapped tags; public-source evidence was gathered for review. Fit and current operating status remain unconfirmed; no buyer intent is inferred.";}
+            return lead;
+          }
+        }catch{}
+        return null;
+      });
+      const results=await Promise.allSettled(researchPromises);
+      const researched=results.filter(r=>r.status==="fulfilled"&&r.value).length;
+      persist();render();
+      message.textContent="Discovery complete: "+data.count+" listings. Research checked "+researched+"/"+researchBatch.length+" leads in parallel. "+(data.note||"");
     }
-    if(researched)message.textContent+=" Automated research is evidence gathering, not proof of fit or buyer intent.";
   }catch(e){message.textContent=e.message+" You can still use the workspace manually; no demo records were imported as real leads."}
   finally{button.disabled=false;button.textContent="⌕ Discover businesses"}
 }
@@ -160,7 +171,28 @@ function refreshClientSelect(){const sel=$("clientSelect"),prev=sel.value;sel.in
 $("leadForm").addEventListener("submit",e=>{e.preventDefault();const id=$("leadId").value||"lead-"+crypto.randomUUID();const old=leads.find(l=>l.id===id);const l={...(old||{id,lat:null,lon:null,score:50,websiteStatus:"Needs review",confidence:"low",provider:"",evidence:[],reason:"Manually added lead; fit rationale and sources need review.",demo:false}),id,name:$("leadName").value.trim(),category:$("leadCategory").value,status:$("leadStatus").value,city:$("leadCity").value.trim(),region:$("leadRegion").value.trim(),website:$("leadWebsite").value.trim(),notes:$("leadNotes").value.trim(),demo:false};if(l.website){l.websiteStatus="User supplied";l.verifiedUrl=""}if(old)Object.assign(old,l);else leads.unshift(l);persist();closeModal();render()});
 document.querySelectorAll("[data-nav]").forEach(b=>b.addEventListener("click",()=>setView(b.dataset.nav)));
 document.querySelectorAll("[data-mode]").forEach(b=>b.addEventListener("click",()=>{activeMode=b.dataset.mode;document.querySelectorAll("[data-mode]").forEach(x=>x.classList.toggle("active",x===b));$("searchInput").placeholder=activeMode==="business"?"Search business opportunities by category or location…":"Search customer prospects by organization or location…"}));
-$("searchBtn").onclick=render;$("searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")render()});$("clearSearch").onclick=()=>{$("searchInput").value="";render()};["categoryFilter","statusFilter","sortSelect"].forEach(id=>$(id).addEventListener("change",render));$("scoreFilter").oninput=()=>{$("scoreValue").textContent=$("scoreFilter").value+"+";render()};$("radiusFilter").oninput=()=>{$("radiusValue").textContent=$("radiusFilter").value+" km";if(circle)circle.setRadius(+$("radiusFilter").value*1000);render()};$("filterToggle").onclick=()=>$("filterPanel").classList.toggle("hidden");$("resetFilters").onclick=()=>{$("categoryFilter").value="all";$("statusFilter").value="all";$("scoreFilter").value=0;$("radiusFilter").value=15;$("scoreValue").textContent="0+";$("radiusValue").textContent="15 km";render()};$("newLeadBtn").onclick=$("emptyAddBtn").onclick=()=>openModal();$("closeModal").onclick=$("cancelModal").onclick=closeModal;$("modalBackdrop").addEventListener("click",e=>{if(e.target===$("modalBackdrop"))closeModal()});$("closeDrawer").onclick=closeDrawer;$("detailDrawer").addEventListener("click",e=>{if(e.target===$("detailDrawer"))closeDrawer()});$("exportBtn").onclick=$("pipelineExport").onclick=exportCSV;$("savedExport").onclick=()=>exportCSV(leads.filter(l=>l.saved===true));$("mapFitBtn").onclick=()=>{const pts=[...markers.values()].map(m=>m.getLatLng());if(pts.length)map.fitBounds(L.latLngBounds(pts).pad(.18))};$("addClientBtn").onclick=()=>{const name=prompt("New client profile name");if(!name?.trim())return;clients.push({id:"client-"+crypto.randomUUID(),name:name.trim(),offer:"",idealCustomer:"",categories:[],excludeChains:true});persist();refreshClientSelect();renderClients()};$("editClientBtn").onclick=()=>editClient($("clientSelect").value);$("clientSelect").onchange=()=>{};document.body.addEventListener("click",e=>{const save=e.target.closest("[data-save]");if(save){e.stopPropagation();const l=leads.find(x=>x.id===save.dataset.save);if(l){l.saved=!l.saved;persist();render()}return}const unsave=e.target.closest("[data-unsave]");if(unsave){e.stopPropagation();const l=leads.find(x=>x.id===unsave.dataset.unsave);if(l){l.saved=false;persist();render()}return}const openDetail=e.target.closest("[data-open-detail]");if(openDetail){e.stopPropagation();openDrawer(openDetail.dataset.openDetail);return}const open=e.target.closest("[data-open]");if(open&&!e.target.closest("[data-status]"))openDrawer(open.dataset.open);const st=e.target.closest("[data-status]");if(st){e.stopPropagation();const l=leads.find(x=>x.id===st.dataset.status);if(l){l.status=st.value;persist();render()}}const verify=e.target.closest("[data-verify]");if(verify){e.stopPropagation();openDrawer(verify.dataset.verify);setTimeout(()=>verifyWebsite(verify.dataset.verify),0)}const edit=e.target.closest("[data-client-edit]");if(edit)editClient(edit.dataset.clientEdit);const use=e.target.closest("[data-client-use]");if(use){$("clientSelect").value=use.dataset.clientUse;setView("radar")}});
+if($("searchBtn"))$("searchBtn").onclick=render;
+$("searchInput").addEventListener("input",render);
+$("searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")render()});
+$("clearSearch").onclick=()=>{$("searchInput").value="";render()};
+["categoryFilter","statusFilter","sortSelect"].forEach(id=>$(id).addEventListener("change",render));
+$("scoreFilter").oninput=()=>{$("scoreValue").textContent=$("scoreFilter").value+"+";render()};
+$("radiusFilter").oninput=()=>{$("radiusValue").textContent=$("radiusFilter").value+" km";if(circle)circle.setRadius(+$("radiusFilter").value*1000);render()};
+$("filterToggle").onclick=()=>$("filterPanel").classList.toggle("hidden");
+$("resetFilters").onclick=()=>{$("categoryFilter").value="all";$("statusFilter").value="all";$("scoreFilter").value=0;$("radiusFilter").value=15;$("scoreValue").textContent="0+";$("radiusValue").textContent="15 km";render()};
+$("newLeadBtn").onclick=$("emptyAddBtn").onclick=()=>openModal();
+$("closeModal").onclick=$("cancelModal").onclick=closeModal;
+$("modalBackdrop").addEventListener("click",e=>{if(e.target===$("modalBackdrop"))closeModal()});
+$("closeDrawer").onclick=closeDrawer;
+$("detailDrawer").addEventListener("click",e=>{if(e.target===$("detailDrawer"))closeDrawer()});
+$("exportBtn").onclick=$("pipelineExport").onclick=exportCSV;
+$("savedExport").onclick=()=>exportCSV(leads.filter(l=>l.saved===true));
+$("mapFitBtn").onclick=()=>{const pts=[...markers.values()].map(m=>m.getLatLng());if(pts.length)map.fitBounds(L.latLngBounds(pts).pad(.18))};
+$("addClientBtn").onclick=()=>{const name=prompt("New client profile name");if(!name?.trim())return;clients.push({id:"client-"+crypto.randomUUID(),name:name.trim(),offer:"",idealCustomer:"",categories:[],excludeChains:true});persist();refreshClientSelect();renderClients()};
+$("editClientBtn").onclick=()=>editClient($("clientSelect").value);
+$("clientSelect").onchange=()=>{render()};
+if($("settingsBtn"))$("settingsBtn").onclick=()=>{alert("Tribus Opportunity Radar workspace settings.\n\nLocal data stored in browser localStorage.\nOpenStreetMap / Nominatim / Overpass used for live business discovery.");};
+document.body.addEventListener("click",e=>{const save=e.target.closest("[data-save]");if(save){e.stopPropagation();const l=leads.find(x=>x.id===save.dataset.save);if(l){l.saved=!l.saved;persist();render()}return}const unsave=e.target.closest("[data-unsave]");if(unsave){e.stopPropagation();const l=leads.find(x=>x.id===unsave.dataset.unsave);if(l){l.saved=false;persist();render()}return}const openDetail=e.target.closest("[data-open-detail]");if(openDetail){e.stopPropagation();openDrawer(openDetail.dataset.openDetail);return}const open=e.target.closest("[data-open]");if(open&&!e.target.closest("[data-status]"))openDrawer(open.dataset.open);const st=e.target.closest("[data-status]");if(st){e.stopPropagation();const l=leads.find(x=>x.id===st.dataset.status);if(l){l.status=st.value;persist();render()}}const verify=e.target.closest("[data-verify]");if(verify){e.stopPropagation();openDrawer(verify.dataset.verify);setTimeout(()=>verifyWebsite(verify.dataset.verify),0)}const edit=e.target.closest("[data-client-edit]");if(edit)editClient(edit.dataset.clientEdit);const use=e.target.closest("[data-client-use]");if(use){$("clientSelect").value=use.dataset.clientUse;setView("radar")}});
 $("discoverLocation").addEventListener("input",()=>{if(!/^Pinned location\s/i.test($("discoverLocation").value.trim())){searchCenter=null;if(circle){circle.remove();circle=null}if(searchCenterMarker){searchCenterMarker.remove();searchCenterMarker=null}if(map)render();$("pinStatus").textContent="Location text entered; the previous pin and radius are cleared."}});
 $("discoverBtn").addEventListener("click",discoverBusinesses);
 $("choosePinBtn").addEventListener("click",openPinPicker);$("currentLocationBtn").addEventListener("click",useCurrentLocation);$("confirmPin").addEventListener("click",confirmPinSelection);$("closePinPicker").addEventListener("click",()=>$("pinPickerBackdrop").classList.add("hidden"));$("cancelPinPicker").addEventListener("click",()=>$("pinPickerBackdrop").classList.add("hidden"));$("pinPickerBackdrop").addEventListener("click",e=>{if(e.target===$("pinPickerBackdrop"))$("pinPickerBackdrop").classList.add("hidden")});
